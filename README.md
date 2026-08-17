@@ -1,9 +1,14 @@
 # ✦ IronXNestCommand // Co-op Lobby, Feind-Schutz & Lochkarten-Sync ✦
 
+[![⬇ Download](https://img.shields.io/github/v/release/Brennerofhell/IronXNestCommand?style=for-the-badge&label=%E2%AC%87%20Download&color=D97757)](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)
+[![Alle Releases](https://img.shields.io/github/downloads/Brennerofhell/IronXNestCommand/total?style=for-the-badge&label=Downloads&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases)
+
 [![Target Game](https://img.shields.io/badge/Game-Iron_Nest:_Heavy_Turret_Simulator-blue?style=for-the-badge)](https://store.steampowered.com)
 [![Modloader](https://img.shields.io/badge/ModLoader-MelonLoader_/_BepInEx_6-green?style=for-the-badge)](https://github.com/LavaGang/MelonLoader)
 [![Design](https://img.shields.io/badge/Design_System-Anthropic_Dieselpunk-E07A5F?style=for-the-badge)](https://anthropic.com)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
+
+> **[⬇ Neueste Version herunterladen](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)** — fertiges Installations-Paket, kein Kompilieren nötig.
 
 **IronXNestCommand** ist eine elegante, hochperformante **Co-op Multiplayer- & Besatzungs-Suite** für *Iron Nest: Heavy Turret Simulator*. Die Modifikation unterstützt **MelonLoader** (`Mods/`) sowie **BepInEx 6 IL2CPP** (`BepInEx/plugins/`) als saubere **Non-Standalone Mod** und integriert sich nahtlos in die offizielle Co-op Mod `IronNestCoop.Core.dll`.
 
@@ -43,7 +48,12 @@ Verhindert das unerwartete Verschwinden oder Despawnen von gegnerischen Einheite
 
 ## 🚀 Installation & Deployment (Non-Standalone Dual-Loader)
 
-### 1-Klick Deployment
+### Option A: Fertiges Paket (empfohlen, kein Kompilieren nötig)
+1. **[⬇ Neueste Version von der Releases-Seite laden](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)**
+2. ZIP entpacken, `Install-Mod.bat` doppelklicken (Spielverzeichnis wird automatisch gefunden).
+3. Voraussetzung: BepInEx 6 (IL2CPP) oder MelonLoader 0.7.3+ (IL2CPP) muss bereits im Spielverzeichnis installiert sein.
+
+### Option B: Selbst bauen
 Führe im Projektverzeichnis einfach [`Build-And-Deploy.bat`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/Build-And-Deploy.bat) aus.
 
 Das Skript baut das Projekt und installiert die DLLs automatisch an beiden Orten:
