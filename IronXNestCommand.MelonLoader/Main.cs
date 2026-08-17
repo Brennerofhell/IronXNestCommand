@@ -37,7 +37,16 @@ namespace IronXNestCommand
             // 5. Währungssystem initialisieren
             IronXNestCommand.Economy.CurrencyManager.Initialize();
 
+            // 6. Steamworks Multiplayer-Erkennung initialisieren
+            SteamworksDetector.Initialize();
+
             MelonLogger.Msg("=== IronXNestCommand erfolgreich geladen ===");
+        }
+
+        public override void OnUpdate()
+        {
+            // Regelmäßige Prüfung der Steam-Lobby
+            SteamworksDetector.Update(0.1f);
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)

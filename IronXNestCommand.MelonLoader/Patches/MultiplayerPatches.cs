@@ -1,17 +1,29 @@
 using HarmonyLib;
 using MelonLoader;
 using IronXNestCommand.Core;
+using IronXNestCommand.Steam;
 
 namespace IronXNestCommand.Patches
 {
     /// <summary>
-    /// Diese Klasse enthält Harmony-Patches zur Erkennung von Multiplayer-Lobbys.
-    /// Da die internen Klassennamen noch unbekannt sind, sind dies Platzhalter.
+    /// Diese Klasse enthält Harmony-Patches zur Erkennung von Multiplayer-Lobbys (z.B. über Steamworks).
     /// </summary>
     public static class MultiplayerPatches
     {
-        // TODO: Ersetze 'NetworkManager' durch die echte Klasse (z.B. SteamMatchmaking, PhotonNetwork).
-        // [HarmonyPatch(typeof(NetworkManager), "OnJoinedLobby")] 
+        // Beispiel-Patch für Steamworks.NET SteamMatchmaking
+        // Sobald Steamworks.NET im Spiel eingebunden ist, kann dieser Patch direkt aktiv werden:
+        /*
+        [HarmonyPatch(typeof(Steamworks.SteamMatchmaking), "LeaveLobby")]
+        public static class SteamMatchmaking_LeaveLobby_Patch
+        {
+            public static void Postfix()
+            {
+                SteamworksDetector.OnLobbyLeft();
+            }
+        }
+        */
+
+        // Platzhalter für generische Netzwerk-/Lobby-Manager des Spiels
         public static class NetworkManager_OnJoinedLobby_Patch
         {
             public static void Postfix()
@@ -21,7 +33,6 @@ namespace IronXNestCommand.Patches
             }
         }
 
-        // [HarmonyPatch(typeof(NetworkManager), "OnLeftLobby")] 
         public static class NetworkManager_OnLeftLobby_Patch
         {
             public static void Postfix()

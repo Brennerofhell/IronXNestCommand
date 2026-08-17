@@ -23,6 +23,11 @@
       <HintPath>$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- Optionale Steamworks.NET Referenz für direkte API-Aufrufe -->
+    <Reference Include="Steamworks.NET" Condition="Exists('$(GameFolder)\Iron Nest_Data\Managed\Steamworks.NET.dll')">
+      <HintPath>$(GameFolder)\Iron Nest_Data\Managed\Steamworks.NET.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>
