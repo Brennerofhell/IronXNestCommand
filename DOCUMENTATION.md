@@ -207,6 +207,23 @@ Als Heavy-Turret-Simulator sperrt und versteckt das Spiel den System-Cursor wäh
 
 ---
 
+### 3.13 🧰 ModManagerGUI.ps1: Stiller Deploy-Fehler & fehlende Co-op-Schutzwarnung
+
+#### Problem-Analyse (Root Cause)
+1. **Deploy-Fehler wurden nie gemeldet**: `Invoke-Build` deklarierte `$deployErrors = 0` als lokale Variable, aber die verschachtelte Funktion `Copy-WithLog` erhöhte `$script:deployErrors` (Skript-Scope) bei einem fehlgeschlagenen Copy. Das sind in PowerShell zwei unabhängige Variablen — die am Ende geprüfte lokale `$deployErrors` blieb dadurch immer `0`, das Tool meldete also selbst bei fehlgeschlagenen Deploys immer „Alles erfolgreich abgeschlossen!".
+2. **Löschwarnung griff nicht beim tatsächlich installierten Co-op-Plugin**: Die Sicherheitswarnung vor dem Löschen prüfte nur auf den Dateinamen `*IronNestCoop*`. Tatsächlich installiert ist aber `OpenNestCoop.dll` (anderes, neueres Plugin) — die Warnung wäre für das echte Co-op-Plugin nie erschienen.
+3. **Keine Unterscheidung eigener vs. fremder Dateien**: Alle `.dll`-Dateien in `BepInEx/plugins/` bzw. `Mods/` wurden generisch als „BepInEx Plugin"/„MelonLoader Mod" gelistet — auch Abhängigkeiten fremder Plugins (z. B. `LiteNetLib.dll`, `SharpGLTF.Core.dll`, vermutlich Netzwerk-/glTF-Abhängigkeiten von OpenNestCoop), die ein Nutzer versehentlich mit-anhaken und löschen könnte.
+4. `Mods\`-Unterordner wurden beim Scan nicht erfasst, nur lose `.dll`-Dateien direkt darin.
+
+#### Die Lösung
+- `$deployErrors` konsequent als `$script:deployErrors` deklariert und geprüft — Deploy-Fehler werden jetzt korrekt erkannt und gemeldet.
+- Löschwarnung erkennt jetzt jede Datei mit `*Coop*` im Namen sowie ihre bekannten Abhängigkeiten (`LiteNetLib*`, `SharpGLTF*`) unabhängig vom genauen Plugin-Namen.
+- Neue `Get-ModTypeLabel`-Hilfsfunktion markiert `IronXNestCommand*`-Dateien explizit als „IronXNestCommand (eigene Mod)" und alles mit `*Coop*` im Namen als „Co-op Plugin (fremd)" in der Liste.
+- `Mods\`-Scan erfasst jetzt auch Unterordner, analog zum bereits vorhandenen `BepInEx\plugins\`-Ordner-Scan.
+- Neue `Get-FolderTypeLabel`-Funktion für Ordner: prüft zusätzlich zum Ordnernamen auch dessen Inhalt (rekursiv) auf `*Coop*`/`LiteNetLib*`/`SharpGLTF*`-Dateien, da Ordner wie `Mods\Mods\`, `Mods\UserLibs\` selbst nicht „Coop" heißen, aber genau solche Dateien enthalten können (real beobachtet: eine offenbar falsch entpackte „OpenNestCoop Standalone"-ZIP landete als `Mods\Mods\OpenNestCoop.MelonMod.dll`, `Mods\UserLibs\{LiteNetLib,SharpGLTF.Core}.dll`, `Mods\Models\player.bundle` — eine Ebene zu tief, direkt in `Mods\` statt im Spiel-Wurzelverzeichnis. MelonLoader lädt nur `Mods\*.dll` auf oberster Ebene, `Mods\Mods\*.dll` vermutlich nicht — das Co-op-Plugin lief dadurch wahrscheinlich gar nicht als MelonLoader-Mod. Kein Bug in IronXNestCommand, aber ein Hinweis wert für jeden, der ähnliche Scan-Ergebnisse sieht.)
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:

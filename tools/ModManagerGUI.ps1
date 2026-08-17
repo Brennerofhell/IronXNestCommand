@@ -406,11 +406,33 @@ function Refresh-ModList {
 
     $found = 0
 
+    # Erkennt unsere eigene Mod unabhaengig vom konkreten Dateinamen-Muster, damit sie sich
+    # in der Liste von fremden Plugins/Abhaengigkeiten (z.B. LiteNetLib.dll, SharpGLTF.Core.dll,
+    # die zu einem Co-op-Plugin gehoeren koennen) klar unterscheidet.
+    function Get-ModTypeLabel ($fileName, $defaultLabel) {
+        if ($fileName -like "IronXNestCommand*") { return "IronXNestCommand (eigene Mod)" }
+        if ($fileName -like "*Coop*") { return "Co-op Plugin (fremd)" }
+        return $defaultLabel
+    }
+
+    # Fuer Ordner reicht die Namensprüfung allein nicht — z.B. "Mods\Mods\", "Mods\UserLibs\"
+    # heissen nicht selbst "*Coop*", enthalten aber OpenNestCoop.MelonMod.dll/LiteNetLib.dll/etc.
+    # Ohne diesen Inhalts-Check wuerde die "(fremd)"-Warnung bei genau den Ordnern fehlen, in
+    # denen ein falsch entpacktes Co-op-Plugin am ehesten steckt.
+    function Get-FolderTypeLabel ($dirInfo, $defaultLabel) {
+        if ($dirInfo.Name -like "IronXNestCommand*") { return "IronXNestCommand (eigene Mod)" }
+        if ($dirInfo.Name -like "*Coop*") { return "Co-op Plugin (fremd)" }
+        $coopContent = Get-ChildItem $dirInfo.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like "*Coop*" -or $_.Name -like "LiteNetLib*" -or $_.Name -like "SharpGLTF*" }
+        if ($coopContent) { return "Enthaelt Co-op Plugin (fremd)" }
+        return $defaultLabel
+    }
+
     # BepInEx/plugins/
     $pluginsDir = Join-Path $script:currentGamePath "BepInEx\plugins"
     if (Test-Path $pluginsDir) {
         Get-ChildItem $pluginsDir -File -Filter "*.dll" | ForEach-Object {
-            $type = if ($_.Name -like "*Coop*") { "Co-op Core Mod" } else { "BepInEx Plugin" }
+            $type = Get-ModTypeLabel $_.Name "BepInEx Plugin"
             $item = New-Object System.Windows.Forms.ListViewItem($_.Name)
             $item.SubItems.Add($type) | Out-Null
             $item.SubItems.Add("$([math]::Round($_.Length/1KB,1)) KB") | Out-Null
@@ -421,8 +443,9 @@ function Refresh-ModList {
         }
         Get-ChildItem $pluginsDir -Directory | ForEach-Object {
             $sz = (Get-ChildItem $_.FullName -Recurse | Measure-Object -Property Length -Sum).Sum
+            $type = Get-FolderTypeLabel $_ "Plugin Ordner"
             $item = New-Object System.Windows.Forms.ListViewItem("$($_.Name) (Ordner)")
-            $item.SubItems.Add("Plugin Ordner") | Out-Null
+            $item.SubItems.Add($type) | Out-Null
             $item.SubItems.Add("$([math]::Round($sz/1KB,1)) KB") | Out-Null
             $item.SubItems.Add("BepInEx\plugins\$($_.Name)\") | Out-Null
             $item.Tag = $_.FullName
@@ -431,14 +454,26 @@ function Refresh-ModList {
         }
     }
 
-    # Mods/ (MelonLoader)
+    # Mods/ (MelonLoader) — inkl. Unterordner, manche Mods legen dort eigene Ordner an
     $modsDir = Join-Path $script:currentGamePath "Mods"
     if (Test-Path $modsDir) {
         Get-ChildItem $modsDir -File -Filter "*.dll" | ForEach-Object {
+            $type = Get-ModTypeLabel $_.Name "MelonLoader Mod"
             $item = New-Object System.Windows.Forms.ListViewItem($_.Name)
-            $item.SubItems.Add("MelonLoader Mod") | Out-Null
+            $item.SubItems.Add($type) | Out-Null
             $item.SubItems.Add("$([math]::Round($_.Length/1KB,1)) KB") | Out-Null
             $item.SubItems.Add("Mods\$($_.Name)") | Out-Null
+            $item.Tag = $_.FullName
+            $listView.Items.Add($item) | Out-Null
+            $found++
+        }
+        Get-ChildItem $modsDir -Directory | ForEach-Object {
+            $sz = (Get-ChildItem $_.FullName -Recurse | Measure-Object -Property Length -Sum).Sum
+            $type = Get-FolderTypeLabel $_ "MelonLoader Mod-Ordner"
+            $item = New-Object System.Windows.Forms.ListViewItem("$($_.Name) (Ordner)")
+            $item.SubItems.Add($type) | Out-Null
+            $item.SubItems.Add("$([math]::Round($sz/1KB,1)) KB") | Out-Null
+            $item.SubItems.Add("Mods\$($_.Name)\") | Out-Null
             $item.Tag = $_.FullName
             $listView.Items.Add($item) | Out-Null
             $found++
@@ -477,10 +512,13 @@ function Delete-SelectedMods {
         return
     }
     $names        = ($checked | ForEach-Object { $_.Text }) -join "`n - "
-    $isCoopSel    = ($checked | Where-Object { $_.Text -like "*IronNestCoop*" }) -ne $null
+    # Erkennt Co-op-Plugins unabhaengig vom genauen Namen (IronNestCoop, OpenNestCoop, etc.) sowie
+    # deren typische Abhaengigkeiten, damit die Warnung nicht an einer hartcodierten Namensvariante
+    # vorbeigeht, falls ein anderes/neueres Co-op-Plugin installiert ist.
+    $coopSelected = $checked | Where-Object { $_.Text -like "*Coop*" -or $_.Text -like "LiteNetLib*" -or $_.Text -like "SharpGLTF*" -or $_.SubItems[1].Text -like "*Coop*" }
     $warningText  = "Moechtest du folgende Mod-Elemente wirklich loeschen?`n`n - $names"
-    if ($isCoopSel) {
-        $warningText += "`n`nACHTUNG: 'IronNestCoop.Core.dll' ist die Haupt-Multiplayer-Mod! Ohne sie funktioniert Co-op nicht mehr."
+    if ($coopSelected) {
+        $warningText += "`n`nACHTUNG: Darunter ist mutmasslich das Co-op-Plugin oder eine seiner Abhaengigkeiten! Ohne diese Datei(en) funktioniert Multiplayer moeglicherweise nicht mehr."
     }
     $res = [System.Windows.Forms.MessageBox]::Show($warningText, "Deinstallation bestaetigen", "YesNo", "Warning")
     if ($res -eq "Yes") {
@@ -608,7 +646,10 @@ function Invoke-Build {
     Append-Log "Build erfolgreich." $cEmerald
 
     # --- DEPLOY ---
-    $deployErrors = 0
+    # $script:deployErrors statt einer lokalen Variable, weil Copy-WithLog als verschachtelte
+    # Funktion sonst eine eigene, nie gelesene Kopie erhoehen wuerde (PowerShell-Scoping) —
+    # das Tool hat dadurch bisher IMMER "Alles erfolgreich" gemeldet, selbst wenn ein Copy fehlschlug.
+    $script:deployErrors = 0
 
     function Copy-WithLog ($src, $dest, $label) {
         if (Test-Path $src) {
@@ -655,9 +696,9 @@ function Invoke-Build {
     }
 
     Append-Log ""
-    if ($deployErrors -gt 0) {
-        Append-Log "Fertig mit $deployErrors Deploy-Fehler(n)." $cYellow
-        $buildStatus.Text      = "Deploy abgeschlossen - $deployErrors Fehler."
+    if ($script:deployErrors -gt 0) {
+        Append-Log "Fertig mit $script:deployErrors Deploy-Fehler(n)." $cYellow
+        $buildStatus.Text      = "Deploy abgeschlossen - $script:deployErrors Fehler."
         $buildStatus.ForeColor = $cYellow
     } else {
         Append-Log "Alles erfolgreich abgeschlossen!" $cEmerald
