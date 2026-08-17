@@ -1,26 +1,50 @@
 # IronXNestCommand
 
-**IronXNestCommand** ist eine in Entwicklung befindliche Assistenz-Mod für das Spiel *Iron Nest: Heavy Turret Simulator*. Die Mod basiert auf dem **MelonLoader** (IL2CPP) Framework.
+**IronXNestCommand** ist eine hochentwickelte Operator-Assistenz-Mod für das Spiel *Iron Nest: Heavy Turret Simulator*. Die Mod basiert auf dem **MelonLoader** (IL2CPP) Framework für .NET 6.
 
-Das Ziel dieser Mod ist es, das Operator-Erlebnis durch intelligente Assistenzsysteme (Munitions-Management, eigene Loadouts) zu verbessern, ein persistentes Rang- und Währungssystem einzuführen und dabei stets fair im Co-op Multiplayer zu bleiben.
+Das Ziel dieser Mod ist es, das Operator-Erlebnis durch intelligente Assistenzsysteme (Munitions-Management, Ballistik-Advisor, eigene Loadouts) zu erweitern, ein persistentes Rang- und Währungssystem einzuführen und dabei stets maximale Fairness und Kompatibilität im Co-op Multiplayer zu gewährleisten.
 
 ---
 
-## 🏗️ Aktueller Entwicklungsstand (Architektur-Grundgerüst)
+## ✨ Features & Module
 
-Die Mod befindet sich in der **Aufbauphase**. Das grundlegende C#-Projekt (`IronXNestCommand.MelonLoader`) steht und ist in folgende logische Module unterteilt:
+### 1. In-Game GUI Overlay (`UI/CommandOverlay.cs`)
+- Interaktives **Dieselpunk / Teleprinter** Overlay im militärischen Cockpit-Stil (Taste **`F8`** zum Umschalten).
+- 5 spezialisierte Konsolen-Tabs:
+  1. **STATUS**: System- und Multiplayer-Status, FairnessGuard-Indikator, Steam-Lobby & Mitspielerliste, Test-Simulator.
+  2. **ADVISOR**: Interaktiver Zielrechner mit automatischer Shell- und Powder-Charge-Empfehlung sowie Shell-Datenbank.
+  3. **ECONOMY**: Kontostände für *Intel Points*, *Logistics Tokens* und *Command Favor* sowie aktives Loadout-Preset.
+  4. **RANKS**: Aktueller Operator-Rang, visuelle XP-Fortschrittsleiste, Perk-Freischaltungen und Lifetime-Statistiken.
+  5. **CONFIG**: Hotkey-Einstellung, Fairness-Optionen und Mod-Toggles mit direkter Speicherung.
 
-### 1. Kernsysteme (`Core/`)
-- **`SaveManager.cs`**: Verwaltet das Speichern und Laden von Mod-Daten (wie Custom Loadouts oder Währungen). Alle Daten werden strikt isoliert im Ordner `<Spielverzeichnis>/UserData/IronXNestCommand/` abgelegt, um Konflikte mit Steam Cloud zu vermeiden.
-- **`FairnessGuard.cs`**: Das Sicherheitsherz der Mod. Deaktiviert automatisch alle QoL- und Gameplay-Boni, sobald eine Multiplayer-Sitzung erkannt wird, um cheaten zu verhindern.
+### 2. Rang- & Erfahrungssystem (`Progression/`)
+- 7 detaillierte Dienstgrade:
+  - **Recruit Operator** (0 XP)
+  - **Junior Gunner** (500 XP)
+  - **Qualified Operator** (1.500 XP)
+  - **Senior Operator** (3.500 XP)
+  - **Master Gunner** (7.000 XP)
+  - **Nest Commander** (12.000 XP)
+  - **High Command Liaison** (20.000 XP)
+- XP-Verdienst durch Missionssiege, Trefferquote und Counter-Battery-Erfolge.
+- Automatische Belohnungsausschüttung (Command Favor & Intel Points) bei Beförderungen.
 
-### 2. Munition & Custom Shells (`Ammo/`)
-- **`ShellDefinition.cs`**: Ein modulares Datenmodell zur Definition eigener Munitionsarten (Schaden, Penetration, Kosten, Explosionsradius).
-- **`CustomShellManager.cs`**: Ein Registry-System, in dem neue, eigene Munitionstypen (z.B. EMP, High-Velocity AP) registriert und verwaltet werden.
+### 3. Logistik & Währungssystem (`Economy/`)
+- **Intel Points**: Verdient durch Aufklärung und Treffer, schaltet taktische Analysen frei.
+- **Logistics Tokens**: Verwaltet Nachschub und Loadout-Preset-Käufe.
+- **Command Favor**: Seltene Währung für experimentelle Shell-Typen.
+- **Fairness-Lock**: Im Multiplayer automatisch gegen unfaire Vorteilsnahme geschützt.
 
-### 3. Steam & Multiplayer (`Steam/`, `Patches/`)
-- **`ModCompatibility.cs`**: Scannt beim Start nach anderen bekannten Co-op Mods (z.B. "Open Nest"), um rechtzeitig Konflikte zu erkennen und P2P-Routen anzupassen.
-- **`MultiplayerPatches.cs` & `Main.cs`**: Sorgt dafür, dass der Eintritt in eine Multiplayer-Lobby oder das Laden einer Co-op Map zuverlässig erkannt wird, woraufhin der `FairnessGuard` ausgelöst wird.
+### 4. Ballistischer Ammo Advisor & Loadouts (`Ammo/`)
+- **`AmmoAdvisor.cs`**: Berechnet für jedes Ziel (Infanterie, Spähwagen, Kampfpanzer, Beton-Bunker, feindliche Artillerie, Radarstationen) die ideale Shell und Treibladung.
+- **`CustomShellManager.cs`**: Registriert neue Munitionstypen wie *EMP Shell Mk I* und *High-Velocity AP (HV-AP)*.
+- **`LoadoutManager.cs`**: Speichert und lädt Munitions-Presets in `loadouts.json`.
+
+### 5. Steamworks & Multiplayer-Schutz (`Steam/`, `Core/`)
+- **`SteamworksDetector.cs`**: Fragt Steam-Lobbys und Mitspieler direkt über Steamworks ab.
+- **`FairnessGuard.cs`**: Deaktiviert automatisch alle Gameplay-Boni, sobald ein Mitspieler in der Sitzung ist.
+- **`ModCompatibility.cs`**: Erkennt koexistierende Mods (wie *Open Nest*).
+- **`SaveManager.cs`**: Schützt den Spielstand vor Steam Cloud-Konflikten durch Speicherung unter `<Spielverzeichnis>/UserData/IronXNestCommand/`.
 
 ---
 
@@ -30,28 +54,21 @@ Die Mod befindet sich in der **Aufbauphase**. Das grundlegende C#-Projekt (`Iron
 - **.NET 6.0 SDK**
 - Eine aktuelle Installation von **MelonLoader** für *Iron Nest*.
 
-### Abhängigkeiten
-Bevor die Mod kompiliert werden kann, müssen in der `IronXNestCommand.csproj` die Pfade zu den Game-Assemblies angepasst werden. Die Mod benötigt Zugriff auf:
-- `MelonLoader.dll`
-- `0Harmony.dll`
-- `Il2CppInterop.Runtime.dll`
-
 ### Build-Prozess
-Öffne die Solution (`.sln`) oder das Projektverzeichnis in einer IDE (Visual Studio / Rider) oder nutze die .NET CLI:
+Öffne die Solution (`.sln`) in deiner bevorzugten IDE (Visual Studio / Rider) oder nutze die .NET CLI:
 ```bash
 dotnet build IronXNestCommand.MelonLoader/IronXNestCommand.csproj -c Release
 ```
 
----
-
-## 🚀 Geplante Features (TODOs)
-
-Die folgenden Systeme sind konzipiert, aber noch nicht (oder nicht vollständig) implementiert:
-
-- [ ] **Economy System**: Einführung von *Intel Points*, *Logistics Tokens* und *Command Favor* zur Freischaltung von Mod-Funktionen.
-- [ ] **Rank & Progression**: Ein XP-System, durch das der Operator im Rang aufsteigt (Recruit bis High Command Liaison).
-- [ ] **Game Assembly Injection**: Das Anflanschen der bisherigen Template-Patches (z.B. `AmmoInjectionPatch.cs`) an die tatsächlichen Spielklassen von *Iron Nest*.
-- [ ] **In-Game UI / Overlay**: Ein im Dieselpunk-Stil gehaltenes Interface zur Konfiguration und zur Nutzung des Ammo Advisors.
+Die erstellte `IronXNestCommand.dll` wird anschließend in den Ordner `Mods/` deines *Iron Nest*-Verzeichnisses kopiert.
 
 ---
-*Dokumentation generiert am 17. August 2026*
+
+## 🗂️ Datenstruktur unter `UserData/IronXNestCommand/`
+- `config.json`: Benutzereinstellungen & Hotkeys
+- `player_progress.json`: Ränge, XP und Statistiken
+- `currency_data.json`: Intel Points, Logistics Tokens, Command Favor
+- `loadouts.json`: Gespeicherte Munitionspakete
+
+---
+*Dokumentation aktualisiert am 17. August 2026*

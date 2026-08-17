@@ -1,7 +1,11 @@
+using System;
 using System.IO;
 using System.Text.Json;
 using MelonLoader;
 using MelonLoader.Utils;
+using IronXNestCommand.Ammo;
+using IronXNestCommand.Economy;
+using IronXNestCommand.Progression;
 
 namespace IronXNestCommand.Core
 {
@@ -9,9 +13,14 @@ namespace IronXNestCommand.Core
     {
         public static string ModDataDirectory { get; private set; } = string.Empty;
 
+        private static readonly JsonSerializerOptions JsonOpts = new()
+        {
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true
+        };
+
         public static void Initialize()
         {
-            // Pfad: <Spielverzeichnis>/UserData/IronXNestCommand/
             ModDataDirectory = Path.Combine(MelonEnvironment.UserDataDirectory, "IronXNestCommand");
 
             if (!Directory.Exists(ModDataDirectory))
@@ -21,39 +30,80 @@ namespace IronXNestCommand.Core
             }
         }
 
-        public static void SaveCurrencyData(IronXNestCommand.Economy.CurrencyData data)
+        // ==================== CONFIG ====================
+        public static void SaveConfig(ModConfig config)
+        {
+            SaveJson("config.json", config);
+        }
+
+        public static ModConfig LoadConfig()
+        {
+            return LoadJson<ModConfig>("config.json") ?? new ModConfig();
+        }
+
+        // ==================== ECONOMY ====================
+        public static void SaveCurrencyData(CurrencyData data)
+        {
+            SaveJson("currency_data.json", data);
+        }
+
+        public static CurrencyData LoadCurrencyData()
+        {
+            return LoadJson<CurrencyData>("currency_data.json") ?? new CurrencyData();
+        }
+
+        // ==================== PROGRESSION ====================
+        public static void SaveProgressionData(ProgressionData data)
+        {
+            SaveJson("player_progress.json", data);
+        }
+
+        public static ProgressionData LoadProgressionData()
+        {
+            return LoadJson<ProgressionData>("player_progress.json") ?? new ProgressionData();
+        }
+
+        // ==================== LOADOUTS ====================
+        public static void SaveLoadouts(LoadoutStore store)
+        {
+            SaveJson("loadouts.json", store);
+        }
+
+        public static LoadoutStore LoadLoadouts()
+        {
+            return LoadJson<LoadoutStore>("loadouts.json") ?? new LoadoutStore();
+        }
+
+        // ==================== GENERIC HELPERS ====================
+        private static void SaveJson<T>(string filename, T data)
         {
             try
             {
-                string path = Path.Combine(ModDataDirectory, "player_progress.json");
-                string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                string path = Path.Combine(ModDataDirectory, filename);
+                string json = JsonSerializer.Serialize(data, JsonOpts);
                 File.WriteAllText(path, json);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                MelonLogger.Error($"[SaveManager] Fehler beim Speichern der Währung: {ex.Message}");
+                MelonLogger.Error($"[SaveManager] Fehler beim Speichern von {filename}: {ex.Message}");
             }
         }
 
-        public static IronXNestCommand.Economy.CurrencyData LoadCurrencyData()
+        private static T LoadJson<T>(string filename) where T : class
         {
-            string path = Path.Combine(ModDataDirectory, "player_progress.json");
-            
+            string path = Path.Combine(ModDataDirectory, filename);
             if (!File.Exists(path))
-            {
-                return new IronXNestCommand.Economy.CurrencyData(); // Neues, leeres Profil
-            }
+                return null;
 
             try
             {
                 string json = File.ReadAllText(path);
-                var data = JsonSerializer.Deserialize<IronXNestCommand.Economy.CurrencyData>(json);
-                return data ?? new IronXNestCommand.Economy.CurrencyData();
+                return JsonSerializer.Deserialize<T>(json, JsonOpts);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                MelonLogger.Error($"[SaveManager] Fehler beim Laden der Währung: {ex.Message}. Erstelle neues Profil.");
-                return new IronXNestCommand.Economy.CurrencyData();
+                MelonLogger.Error($"[SaveManager] Fehler beim Laden von {filename}: {ex.Message}");
+                return null;
             }
         }
     }
