@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>IronXNestCommand.Core</RootNamespace>
+    <AssemblyName>IronXNestCommand.Core</AssemblyName>
+    <Description>Loader-independent core for IronXNestCommand.</Description>
+  </PropertyGroup>
+</Project>

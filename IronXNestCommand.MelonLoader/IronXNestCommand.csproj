@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>IronXNestCommand</AssemblyName>
+    <RootNamespace>IronXNestCommand</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Verweise auf die MelonLoader- und Spiel-Assemblies -->
+  <ItemGroup>
+    <!-- Passe die Pfade zu deiner Iron Nest Installation an -->
+    <Reference Include="MelonLoader">
+      <HintPath>$(GameFolder)\MelonLoader\net6\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameFolder)\MelonLoader\net6\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
