@@ -66,8 +66,10 @@ $script:dotnetExe       = Find-DotNet
 # ==========================================
 $form = New-Object System.Windows.Forms.Form
 $form.Text          = "Iron Nest // Mod Manager"
-$form.Size          = New-Object System.Drawing.Size(700, 620)
-$form.MinimumSize   = New-Object System.Drawing.Size(640, 540)
+$form.Size          = New-Object System.Drawing.Size(700, 640)
+# Muss mindestens so hoch sein wie TabControl-Y (64) + TabControl-Hoehe (510) + Fensterrahmen/Titelleiste,
+# sonst wird die Lösch-Button-Leiste am unteren Rand des Deinstallations-Tabs abgeschnitten.
+$form.MinimumSize   = New-Object System.Drawing.Size(640, 640)
 $form.StartPosition = "CenterScreen"
 $form.BackColor     = $cBg
 $form.ForeColor     = $cText
