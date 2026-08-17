@@ -57,6 +57,9 @@ namespace IronXNestCommand
             // 9. GUI Overlay initialisieren
             CommandOverlay.Initialize(Config);
 
+            // 10. Reale Spiel-Hooks (Missionen, Shells, Requisition) scharfschalten
+            IronXNestCommand.Patches.GameEventsPatch.InitializePatches(HarmonyInstance);
+
             MelonLogger.Msg("==================================================");
             MelonLogger.Msg($"[IronXNestCommand] Erfolgreich geladen! Drücke [{Config.ToggleKey}] für das Overlay.");
             MelonLogger.Msg("==================================================");
