@@ -2,7 +2,6 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
-using Il2CppInterop.Runtime;
 using MelonLoader;
 using IronXNestCommand.Core;
 using IronXNestCommand.UI;
@@ -12,12 +11,27 @@ namespace IronXNestCommand.Patches
     /// <summary>
     /// Verhindert das vorzeitige oder fehlerhafte Despawnen/Unsichtbarwerden von Gegner- und Zieleinheiten im Co-op.
     /// Schützt Einheiten vor Culling-Entfernung, Nebel-Timeout und fehlerhaften HideVisualRoot-Aufrufen.
+    ///
+    /// Löst Ziele/Member ausschließlich über Reflection (keine direkten `EntityLocation`/`MinimalVolumeCulling`
+    /// Typreferenzen) — die im MelonLoader-generierten Il2CppAssemblies-Set generierten Stub-Typen ließen sich
+    /// beim Kompilieren nicht zuverlässig direkt referenzieren (CS0400), obwohl die Typen laut all_types.txt im
+    /// Spiel existieren. Der BepInEx-Host verwendet aus genau diesem Grund bereits denselben Reflection-Ansatz.
     /// </summary>
     public static class EnemyDespawnGuard
     {
         private static float _watchdogTimer = 0f;
         private const float WatchdogInterval = 1.5f;
         private static bool _patchesApplied = false;
+
+        private static Type _entityLocationType;
+        private static Type _cullTargetType;
+        private static PropertyInfo _entityProp;
+        private static PropertyInfo _isAliveProp;
+        private static PropertyInfo _visualRootProp;
+        private static PropertyInfo _visibilityGroupProp;
+        private static PropertyInfo _alphaProp;
+        private static PropertyInfo _startHiddenProp;
+        private static PropertyInfo _neverCullProp;
 
         public static void InitializePatches(HarmonyLib.Harmony harmony)
         {
@@ -62,6 +76,26 @@ namespace IronXNestCommand.Patches
 
                 if (type == null) return;
 
+                if (type.Name == "EntityLocation")
+                {
+                    _entityLocationType = type;
+                    _entityProp = type.GetProperty("Entity");
+                    _visualRootProp = type.GetProperty("VisualRoot");
+                    _visibilityGroupProp = type.GetProperty("VisibilityGroup");
+                    _startHiddenProp = type.GetProperty("StartWithVisualRootHidden");
+
+                    var vgType = _visibilityGroupProp?.PropertyType;
+                    _alphaProp = vgType?.GetProperty("alpha");
+
+                    var entityType = _entityProp?.PropertyType;
+                    _isAliveProp = entityType?.GetProperty("IsAlive");
+                }
+                else if (type.Name == "CullTarget")
+                {
+                    _cullTargetType = type;
+                    _neverCullProp = type.GetProperty("neverCull");
+                }
+
                 var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
                 if (method != null)
                 {
@@ -71,7 +105,10 @@ namespace IronXNestCommand.Patches
                     MelonLogger.Msg($"[EnemyDespawnGuard] ✔ Hook aktiv: {type.Name}.{method.Name}");
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[EnemyDespawnGuard] Fehler beim Patch von {typeName}.{methodName}: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -84,19 +121,28 @@ namespace IronXNestCommand.Patches
 
             try
             {
-                if (__instance is global::EntityLocation el)
+                if (_entityProp != null)
                 {
-                    if (el.Entity != null && el.Entity.IsAlive)
+                    var entity = _entityProp.GetValue(__instance);
+                    if (entity != null)
                     {
-                        if (el.VisualRoot != null && !el.VisualRoot.activeSelf)
+                        bool isAlive = _isAliveProp != null ? (bool)(_isAliveProp.GetValue(entity) ?? true) : true;
+                        if (isAlive)
                         {
-                            el.VisualRoot.SetActive(true);
+                            var visualRoot = _visualRootProp?.GetValue(__instance) as GameObject;
+                            if (visualRoot != null && !visualRoot.activeSelf)
+                            {
+                                visualRoot.SetActive(true);
+                            }
+
+                            var vg = _visibilityGroupProp?.GetValue(__instance);
+                            if (vg != null && _alphaProp != null)
+                            {
+                                _alphaProp.SetValue(vg, 1.0f);
+                            }
+
+                            return false; // Verhindert das Ausblenden / Despawnen
                         }
-                        if (el.VisibilityGroup != null && el.VisibilityGroup.alpha < 0.9f)
-                        {
-                            el.VisibilityGroup.alpha = 1.0f;
-                        }
-                        return false; // Verhindert das Ausblenden / Despawnen
                     }
                 }
             }
@@ -114,17 +160,21 @@ namespace IronXNestCommand.Patches
 
             try
             {
-                if (__instance is global::EntityLocation el)
+                if (_startHiddenProp != null)
                 {
-                    el.StartWithVisualRootHidden = false;
-                    if (el.VisualRoot != null && !el.VisualRoot.activeSelf)
-                    {
-                        el.VisualRoot.SetActive(true);
-                    }
-                    if (el.VisibilityGroup != null && el.VisibilityGroup.alpha < 0.9f)
-                    {
-                        el.VisibilityGroup.alpha = 1.0f;
-                    }
+                    _startHiddenProp.SetValue(__instance, false);
+                }
+
+                var visualRoot = _visualRootProp?.GetValue(__instance) as GameObject;
+                if (visualRoot != null && !visualRoot.activeSelf)
+                {
+                    visualRoot.SetActive(true);
+                }
+
+                var vg = _visibilityGroupProp?.GetValue(__instance);
+                if (vg != null && _alphaProp != null)
+                {
+                    _alphaProp.SetValue(vg, 1.0f);
                 }
             }
             catch { }
@@ -140,20 +190,27 @@ namespace IronXNestCommand.Patches
 
             try
             {
-                if (culled && __instance is global::MinimalVolumeCulling.CullTarget ct)
+                if (culled && _neverCullProp != null)
                 {
-                    if (ct.neverCull)
+                    bool neverCull = (bool)(_neverCullProp.GetValue(__instance) ?? false);
+                    if (neverCull)
                     {
                         culled = false;
                         return false;
                     }
 
-                    var el = ct.GetComponent<global::EntityLocation>();
-                    if (el != null && el.Entity != null && el.Entity.IsAlive)
+                    if (__instance is Component comp)
                     {
-                        ct.neverCull = true;
-                        culled = false;
-                        return false;
+                        if (_entityLocationType != null)
+                        {
+                            var el = comp.GetComponent(Il2CppInterop.Runtime.Il2CppType.From(_entityLocationType));
+                            if (el != null)
+                            {
+                                _neverCullProp.SetValue(__instance, true);
+                                culled = false;
+                                return false;
+                            }
+                        }
                     }
                 }
             }
@@ -174,7 +231,8 @@ namespace IronXNestCommand.Patches
 
             try
             {
-                var il2cppType = Il2CppType.Of<global::EntityLocation>();
+                if (_entityLocationType == null) return;
+                var il2cppType = Il2CppInterop.Runtime.Il2CppType.From(_entityLocationType);
                 if (il2cppType == null) return;
 
                 var locations = UnityEngine.Object.FindObjectsOfType(il2cppType);
@@ -183,41 +241,44 @@ namespace IronXNestCommand.Patches
                 int protectedCount = 0;
                 for (int i = 0; i < locations.Length; i++)
                 {
-                    var obj = locations[i];
-                    if (obj == null) continue;
+                    var el = locations[i];
+                    if (el == null) continue;
 
-                    var el = obj.TryCast<global::EntityLocation>();
-                    if (el != null && el.Entity != null && el.Entity.IsAlive)
+                    var entity = _entityProp?.GetValue(el);
+                    if (entity != null)
                     {
-                        bool wasHidden = false;
-
-                        if (el.VisualRoot != null && !el.VisualRoot.activeSelf)
+                        bool isAlive = _isAliveProp != null ? (bool)(_isAliveProp.GetValue(entity) ?? true) : true;
+                        if (isAlive)
                         {
-                            el.VisualRoot.SetActive(true);
-                            wasHidden = true;
-                        }
+                            bool wasHidden = false;
+                            var visualRoot = _visualRootProp?.GetValue(el) as GameObject;
+                            if (visualRoot != null && !visualRoot.activeSelf)
+                            {
+                                visualRoot.SetActive(true);
+                                wasHidden = true;
+                            }
 
-                        if (el.VisibilityGroup != null && el.VisibilityGroup.alpha < 0.8f)
-                        {
-                            el.VisibilityGroup.alpha = 1.0f;
-                            wasHidden = true;
-                        }
+                            var vg = _visibilityGroupProp?.GetValue(el);
+                            if (vg != null && _alphaProp != null)
+                            {
+                                float a = (float)(_alphaProp.GetValue(vg) ?? 1f);
+                                if (a < 0.8f)
+                                {
+                                    _alphaProp.SetValue(vg, 1f);
+                                    wasHidden = true;
+                                }
+                            }
 
-                        if (!el.gameObject.activeSelf)
-                        {
-                            el.gameObject.SetActive(true);
-                            wasHidden = true;
-                        }
+                            if (el is Component comp && comp.gameObject != null && !comp.gameObject.activeSelf)
+                            {
+                                comp.gameObject.SetActive(true);
+                                wasHidden = true;
+                            }
 
-                        var cull = el.GetComponent<global::MinimalVolumeCulling.CullTarget>();
-                        if (cull != null && !cull.neverCull)
-                        {
-                            cull.neverCull = true;
-                        }
-
-                        if (wasHidden)
-                        {
-                            protectedCount++;
+                            if (wasHidden)
+                            {
+                                protectedCount++;
+                            }
                         }
                     }
                 }

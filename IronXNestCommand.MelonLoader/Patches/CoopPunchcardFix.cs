@@ -115,13 +115,16 @@ namespace IronXNestCommand.Patches
                         if (item != null) fullText += item.ToString() + " ";
                     }
 
-                    float dist = 1200f;
-                    float az = 0f;
-
+                    // Ohne erkannte Distanz gibt es kein echtes Ziel — vorher wurde hier stillschweigend
+                    // auf 1200m/0° zurückgefallen und eine Feuerleitlösung für ein Phantom-Ziel berechnet.
                     var distMatch = Regex.Match(fullText, @"(?:Dist|Entf|Range|Distance)[:\s]+(\d+)", RegexOptions.IgnoreCase);
-                    if (distMatch.Success && float.TryParse(distMatch.Groups[1].Value, out float parsedDist))
-                        dist = parsedDist;
+                    if (!distMatch.Success || !float.TryParse(distMatch.Groups[1].Value, out float dist))
+                    {
+                        MelonLogger.Warning($"[CoopPunchcardFix] Konnte keine Distanz aus Funkspruch parsen, überspringe: \"{fullText.Trim()}\"");
+                        return;
+                    }
 
+                    float az = 0f;
                     var azMatch = Regex.Match(fullText, @"(?:Azimuth|Bearing|Peilung|Heading)[:\s]+(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
                     if (azMatch.Success && float.TryParse(azMatch.Groups[1].Value, out float parsedAz))
                         az = parsedAz;

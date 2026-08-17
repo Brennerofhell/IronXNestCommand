@@ -102,10 +102,10 @@ namespace IronXNestCommand.Host.BepInEx.Core
 
             try
             {
-                if (_cachedTurretInstance == null)
+                if (IsUnityDestroyed(_cachedTurretInstance))
                     _cachedTurretInstance = _instanceProp.GetValue(null);
 
-                if (_cachedTurretInstance == null)
+                if (IsUnityDestroyed(_cachedTurretInstance))
                 {
                     IsTurretAvailable = false;
                     _cachedLeftGun = null;
@@ -140,6 +140,16 @@ namespace IronXNestCommand.Host.BepInEx.Core
                 _cachedLeftGun = null;
                 _cachedRightGun = null;
             }
+        }
+
+        // IL2CPP/Unity-Objekte überladen `==` für den "fake null"-Zustand zerstörter Objekte
+        // (z.B. nach Missionsende/Szenenwechsel); ein reiner `object == null`-Vergleich prüft
+        // nur Referenzgleichheit und erkennt das nicht zuverlässig — dadurch wurde der Cache
+        // nicht immer refresht und Update() konnte stale Telemetrie-Werte von einem bereits
+        // zerstörten Turret-Objekt liefern, bis irgendwann zufällig eine Exception den Cache leerte.
+        private static bool IsUnityDestroyed(object obj)
+        {
+            return obj == null || (obj is UnityEngine.Object unityObj && unityObj == null);
         }
 
         private static void ReadGun(object gunObj, GunStatus status)

@@ -128,14 +128,17 @@ namespace IronXNestCommand.Host.BepInEx.Patches
                         if (item != null) fullText += item.ToString() + " ";
                     }
 
-                    // Versuche Distanz und Azimuth aus dem Funkspruch zu parsen
-                    float dist = 1200f;
-                    float az = 0f;
-
+                    // Versuche Distanz und Azimuth aus dem Funkspruch zu parsen. Ohne erkannte Distanz
+                    // gibt es kein echtes Ziel — vorher wurde hier stillschweigend auf 1200m/0° zurückgefallen
+                    // und eine Feuerleitlösung für ein Phantom-Ziel berechnet und an den Gast verteilt.
                     var distMatch = Regex.Match(fullText, @"(?:Dist|Entf|Range|Distance)[:\s]+(\d+)", RegexOptions.IgnoreCase);
-                    if (distMatch.Success && float.TryParse(distMatch.Groups[1].Value, out float parsedDist))
-                        dist = parsedDist;
+                    if (!distMatch.Success || !float.TryParse(distMatch.Groups[1].Value, out float dist))
+                    {
+                        ModLogger.Warn($"[CoopPunchcardFix] Konnte keine Distanz aus Funkspruch parsen, überspringe: \"{fullText.Trim()}\"");
+                        return;
+                    }
 
+                    float az = 0f;
                     var azMatch = Regex.Match(fullText, @"(?:Azimuth|Bearing|Peilung|Heading)[:\s]+(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
                     if (azMatch.Success && float.TryParse(azMatch.Groups[1].Value, out float parsedAz))
                         az = parsedAz;

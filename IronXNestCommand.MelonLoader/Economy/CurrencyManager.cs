@@ -28,6 +28,15 @@ namespace IronXNestCommand.Economy
         {
             if (amount < 0) return;
 
+            // FairnessGuard: eigene Währungen sind laut Mod-Plan nur im Singleplayer voll aktiv,
+            // damit im Co-op niemand einen wirtschaftlichen Vorteil gegenüber Mitspielern hat.
+            // Rang/XP zählen laut Design weiterhin (ProgressionManager.AddXP ist NICHT gegated).
+            if (FairnessGuard.IsMultiplayerActive)
+            {
+                MelonLogger.Msg($"[CurrencyManager] Multiplayer aktiv — {amount} {type} NICHT gutgeschrieben (Fairness).");
+                return;
+            }
+
             switch (type)
             {
                 case CurrencyType.IntelPoints:

@@ -32,11 +32,13 @@
       <Private>false</Private>
     </Reference>
     
-    <!-- Fallback auf BepInEx Interop falls vorhanden -->
-    <Reference Include="$(GameFolder)\BepInEx\interop\*.dll" Condition="Exists('$(GameFolder)\BepInEx\interop')">
+    <!-- Fallback auf BepInEx Interop NUR wenn MelonLoader selbst keine eigenen Assemblies hat —
+         bei Dual-Loader-Installs (beide Ordner vorhanden) würden sonst zwei verschiedene physische
+         "Assembly-CSharp.dll"-Kopien gleichzeitig referenziert und die Typauflösung bricht (CS0400). -->
+    <Reference Include="$(GameFolder)\BepInEx\interop\*.dll" Condition="!Exists('$(GameFolder)\MelonLoader\Il2CppAssemblies') AND Exists('$(GameFolder)\BepInEx\interop')">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll" Condition="Exists('$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll')">
+    <Reference Include="$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll" Condition="!Exists('$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll') AND Exists('$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll')">
       <Private>false</Private>
     </Reference>
   </ItemGroup>

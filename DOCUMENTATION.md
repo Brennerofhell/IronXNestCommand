@@ -122,6 +122,91 @@ Auf Gast-Rechnern (Nicht-Host) wurden Einsatz-Lochkarten am Rechentisch nach ein
 
 ---
 
+### 3.5 🖱️ Overlay nicht klickbar (Cursor-Sperre durch Turret-Zielsteuerung)
+
+#### Problem-Analyse (Root Cause)
+Als Heavy-Turret-Simulator sperrt und versteckt das Spiel den System-Cursor während des Zielens (`Cursor.lockState = CursorLockMode.Locked`, `Cursor.visible = false`). Beim Öffnen des Overlays (`[F8]`) blieb diese Sperre unangetastet — der Mauszeiger konnte sich nicht bewegen, Klicks auf Buttons kamen nie an.
+
+#### Die Lösung
+- Neue zentrale `SetVisible(bool)`-Methode in `CommandOverlay` (beide Hosts): setzt beim Öffnen `Cursor.lockState = CursorLockMode.None` und `Cursor.visible = true`, beim Schließen wieder `Locked`/`false`.
+- Ersetzt alle direkten `IsVisible = ...`-Zuweisungen (Hotkey-Toggle, `✕`-Button, Initial-Zustand beim Mod-Start).
+
+---
+
+### 3.6 💥 StackOverflowException beim Verlassen der Lobby (MelonLoader)
+
+#### Problem-Analyse (Root Cause)
+`MultiplayerPatches.LeaveLobby_Postfix` (Harmony-Postfix auf `Steamworks.SteamMatchmaking.LeaveLobby`) rief `SteamworksDetector.OnLobbyLeft()` auf. `OnLobbyLeft()` rief wiederum `TryLeaveLobby()` auf — welches im generischen Steamworks-Fallback-Pfad **erneut** die native `LeaveLobby`-Methode invokte. Das löste denselben Harmony-Postfix erneut aus → unendliche Rekursion → Absturz des Spielprozesses.
+
+#### Die Lösung
+- `OnLobbyLeft()` ist jetzt reiner Zustands-Reset (kein erneuter nativer Aufruf) — genau das, was der Postfix nach bereits erfolgtem nativen `LeaveLobby()` braucht.
+- `TryLeaveLobby()` (für den nutzerausgelösten Fall, z. B. Klick auf „🚪 Verlassen") ruft die native/Coop-Leave-Methode auf und delegiert danach an `OnLobbyLeft()` für den Reset — spiegelt jetzt exakt das bereits korrekte Muster aus dem BepInEx-Host.
+
+---
+
+### 3.7 ⚖️ FairnessGuard sperrte keine Währungs-Belohnungen
+
+#### Problem-Analyse (Root Cause)
+`FairnessGuard.IsMultiplayerActive` wurde korrekt gesetzt, aber `CurrencyManager.AddCurrency(...)` (Intel Points, Logistics Tokens, Command Favor) prüfte es nirgends. Treffer- und Missionsbelohnungen wurden im Multiplayer 1:1 wie im Singleplayer gutgeschrieben — ein klarer Verstoß gegen das dokumentierte Fairness-Versprechen. Zusätzlich setzte `SteamworksDetector.CheckSteamState()` (MelonLoader) `FairnessGuard` beim Verlassen einer Coop-Lobby nie zurück auf `false`.
+
+#### Die Lösung
+- `CurrencyManager.AddCurrency(...)` (beide Hosts) prüft jetzt zentral `FairnessGuard.IsMultiplayerActive` und verweigert die Gutschrift im Multiplayer — an dieser einen Stelle, damit kein Aufrufer (aktuell oder künftig) das umgehen kann.
+- Rang/XP (`ProgressionManager.AddXP`) bleiben bewusst **ungegated** — laut Mod-Plan zählt Progression im Multiplayer weiter, nur die Wirtschaft ist Singleplayer-exklusiv.
+- `CheckSteamState()` (MelonLoader) setzt `FairnessGuard.SetMultiplayerState(false)`, sobald keine aktive Lobby mehr erkannt wird (spiegelt den BepInEx-Host).
+
+---
+
+### 3.8 🖱️×N Mehrfach-Feuern von GUI-Buttons pro Klick
+
+#### Problem-Analyse (Root Cause)
+`DrawButton()` erkannte Klicks über `Input.GetMouseButtonUp(0)` — dieser Zustand bleibt für das **gesamte physische Frame** wahr, während Unity IMGUI `OnGUI()` pro Frame mehrfach aufruft (Layout- und Repaint-Pass, ggf. weitere Event-Pässe). Ein einzelner Klick auf z. B. „🔄 Besatzung re-syncen" oder „➕ Lobby-ID generieren" konnte dadurch die Aktion 2–3× auslösen.
+
+#### Die Lösung
+- Klick-Erkennung nutzt jetzt `Event.current.type == EventType.MouseUp && Event.current.button == 0`, was pro echtem Maus-Event nur einmal zutrifft, plus `Event.current.Use()` zum Konsumieren des Events.
+
+---
+
+### 3.9 🖨️ Lokaler Drucker-Aufruf warf TargetParameterCountException
+
+#### Problem-Analyse (Root Cause)
+`PunchcardSpawner.EnsureGuestFireMissionCard()` (BepInEx) rief `_printMethod.Invoke(printer, null)` auf — also mit 0 Argumenten. Die real aufgelöste Methode `FireMissionCardPrinter.HandleCalculationSuccess` erwartet aber 4 Parameter (`float elevationDegrees, float clampedRange, int powderCharge, bool wasClamped`), bestätigt durch die bereits funktionierende Harmony-Postfix-Signatur in `CoopPunchcardFix.OnPrinterCalculate_Postfix`. Der Aufruf warf daher immer eine `TargetParameterCountException`, die vom umgebenden `catch` still verschluckt wurde — der lokale Drucker-Pfad hat dadurch nie tatsächlich eine Karte gedruckt.
+
+#### Die Lösung
+- Neue Hilfsmethode `BuildPrintMethodArgs(MethodInfo)` liefert für `HandleCalculationSuccess` die 4 echten Werte aus `PunchcardSpawner.CurrentMission` (Elevation, Distanz, Ladungen, `wasClamped = false`); für unbekannte Fallback-Methoden (`PrintCard`/`DispenseCard`) werden typgerechte Default-Werte je Parameter erzeugt statt einer garantiert falschen Argumentanzahl.
+
+---
+
+### 3.10 📡 Teleprinter-Parser rechnete Phantom-Ziel bei Regex-Fehltreffer
+
+#### Problem-Analyse (Root Cause)
+`OnTeleprinterSubmitLines_Prefix` (beide Hosts) parste Distanz/Azimut per Regex aus freiem Funkspruch-Text. Schlug die Distanz-Regex fehl (andere Formulierung, Lokalisierung, neuer Missionstyp), fiel der Code stillschweigend auf einen festen Default (1200 m, 0°) zurück und berechnete darauf eine „echte" Feuerleitlösung für ein nicht existierendes Ziel — ohne jede Fehlermeldung.
+
+#### Die Lösung
+- Ohne erkannte Distanz wird jetzt **kein** Missionsdatensatz mehr erzeugt; stattdessen loggt der Handler eine Warnung mit dem nicht-erkannten Funkspruch-Text und überspringt den Vorgang.
+
+---
+
+### 3.11 📡 TurretTelemetry lieferte stale Daten nach Missionsende (Unity „Fake Null")
+
+#### Problem-Analyse (Root Cause)
+`_cachedTurretInstance` war als `object` typisiert; `_cachedTurretInstance == null` prüfte daher reine Referenzgleichheit. IL2CPP/Unity-Objekte überladen `==` für den „Fake Null"-Zustand zerstörter Objekte (z. B. nach Missionsende oder Szenenwechsel) — dieser wurde durch die reine `object`-Referenzprüfung nicht erkannt. Property-Zugriffe auf ein bereits zerstörtes natives Objekt lieferten dadurch teils stale/falsche Werte statt einer Exception, wodurch der Cache nicht zuverlässig neu befüllt wurde.
+
+#### Die Lösung
+- Neue Hilfsmethode `IsUnityDestroyed(object)`: castet auf `UnityEngine.Object` und nutzt dessen überladenen `==`-Operator, sofern zutreffend, sonst normale Null-Prüfung. Ersetzt beide `_cachedTurretInstance == null`-Vergleiche in `Update()`.
+
+---
+
+### 3.12 🛡️ MelonLoader-Build brach mit CS0400 auf `EntityLocation`/`MinimalVolumeCulling`
+
+#### Problem-Analyse (Root Cause)
+`EnemyDespawnGuard.cs` referenzierte im MelonLoader-Host `EntityLocation`/`MinimalVolumeCulling.CullTarget` direkt als C#-Compile-Zeit-Typen (`__instance is global::EntityLocation el`). Die von MelonLoaders Il2CppAssemblyGenerator (Cpp2IL) erzeugten Stub-Assemblies ließen sich für diese konkreten Typen nicht zuverlässig direkt referenzieren — der Compiler brach mit `CS0400` ab, obwohl die Typen laut `all_types.txt` im Spiel existieren. Der BepInEx-Host hatte exakt dasselbe Problem nie, weil seine Version von `EnemyDespawnGuard.cs` von Anfang an ausschließlich über Reflection (Typname als String) arbeitet.
+
+#### Die Lösung
+- MelonLoaders `EnemyDespawnGuard.cs` wurde 1:1 auf denselben Reflection-Ansatz wie der BepInEx-Host umgestellt: `Type.GetType("EntityLocation, Assembly-CSharp")` statt direkter Typreferenz, Zugriff auf Felder/Properties (`Entity`, `IsAlive`, `VisualRoot`, `VisibilityGroup.alpha`, `StartWithVisualRootHidden`, `neverCull`) über gecachte `PropertyInfo`-Objekte statt Compile-Zeit-Member-Zugriff.
+- Dadurch bauen jetzt **beide Hosts identisch robust**, unabhängig davon, ob der jeweilige Interop-Generator diese speziellen Typen für direkte Referenzierung sauber exponiert.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:

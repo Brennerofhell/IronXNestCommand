@@ -98,7 +98,7 @@ namespace IronXNestCommand.Host.BepInEx.Core
                     {
                         if (printer != null)
                         {
-                            _printMethod.Invoke(printer, null);
+                            _printMethod.Invoke(printer, BuildPrintMethodArgs(_printMethod));
                             ModLogger.Info("[PunchcardSpawner] ✔ Einsatz-Lochkarte über lokalen Drucker gedruckt.");
                             return true;
                         }
@@ -156,6 +156,33 @@ namespace IronXNestCommand.Host.BepInEx.Core
             {
                 return false;
             }
+        }
+
+        // Die echte Signatur von FireMissionCardPrinter.HandleCalculationSuccess ist
+        // (float elevationDegrees, float clampedRange, int powderCharge, bool wasClamped) —
+        // bestätigt durch den Harmony-Postfix in CoopPunchcardFix.OnPrinterCalculate_Postfix.
+        // Ein Aufruf mit 0 Argumenten (vorher: Invoke(printer, null)) wirft eine
+        // TargetParameterCountException, die vom umgebenden catch stillschweigend verschluckt
+        // wurde — dieser Pfad hat dadurch bislang nie tatsächlich eine Karte gedruckt.
+        private static object[] BuildPrintMethodArgs(MethodInfo method)
+        {
+            var parameters = method.GetParameters();
+            if (parameters.Length == 0) return null;
+
+            if (method.Name == "HandleCalculationSuccess" && parameters.Length == 4)
+            {
+                return new object[] { CurrentMission.Elevation, CurrentMission.Distance, CurrentMission.RecommendedCharges, false };
+            }
+
+            // Unbekannte Fallback-Methode (PrintCard/DispenseCard) — Default-Werte je Parametertyp,
+            // besser als eine garantiert falsche Argumentanzahl.
+            var args = new object[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                var pt = parameters[i].ParameterType;
+                args[i] = pt.IsValueType ? Activator.CreateInstance(pt) : null;
+            }
+            return args;
         }
 
         private static Il2CppSystem.Type GetIl2CppType(Type managedType)

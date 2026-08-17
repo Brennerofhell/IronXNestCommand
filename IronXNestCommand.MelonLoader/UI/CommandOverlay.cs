@@ -78,7 +78,7 @@ namespace IronXNestCommand.UI
         public static void Initialize(ModConfig config)
         {
             Config = config ?? new ModConfig();
-            IsVisible = Config.StartVisible;
+            SetVisible(Config.StartVisible);
             AudioFeedback.Initialize();
             AmmoRequisitionBridge.Initialize();
         }
@@ -88,7 +88,7 @@ namespace IronXNestCommand.UI
             float dt = Time.unscaledDeltaTime;
 
             if (CheckToggleKey())
-                IsVisible = !IsVisible;
+                SetVisible(!IsVisible);
 
             if (_copiedTimer > 0f)
             {
@@ -122,6 +122,15 @@ namespace IronXNestCommand.UI
         {
             _notificationText = text;
             _notificationTimer = duration;
+        }
+
+        // Der Turret-Simulator sperrt die Maus fürs Zielen (Cursor.lockState = Locked);
+        // ohne dies freizugeben, kommen Klicks auf die Overlay-Buttons nie an.
+        private static void SetVisible(bool visible)
+        {
+            IsVisible = visible;
+            Cursor.lockState = visible ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = visible;
         }
 
         public static void OnGUI()
@@ -236,7 +245,7 @@ namespace IronXNestCommand.UI
             // Close Button [✕]
             if (DrawButton(new Rect(wx + ww - 28, wy + 14, 20, 20), "✕", _btnDarkStyle))
             {
-                IsVisible = false;
+                SetVisible(false);
                 AudioFeedback.PlayClick();
             }
 
@@ -546,8 +555,16 @@ namespace IronXNestCommand.UI
             GUI.Label(rect, label, style);
             GUI.color = oldColor;
 
-            if (hover && Input.GetMouseButtonUp(0))
+            // Input.GetMouseButtonUp(0) bleibt für das gesamte physische Frame true, aber Unity IMGUI
+            // ruft OnGUI pro Frame mehrfach auf (Layout- und Repaint-Pass) — dadurch feuerte ein
+            // einzelner Klick den Button mehrfach. Event.current.type liefert pro Aufruf nur einmal
+            // MouseUp, und Use() verhindert, dass darunterliegende Elemente dasselbe Event nochmal sehen.
+            var evt = Event.current;
+            if (hover && evt != null && evt.type == EventType.MouseUp && evt.button == 0)
+            {
+                evt.Use();
                 return true;
+            }
 
             return false;
         }

@@ -184,6 +184,7 @@ namespace IronXNestCommand.Steam
                     else
                     {
                         LastStatusMessage = "Keine aktive Lobby";
+                        FairnessGuard.SetMultiplayerState(false);
                     }
                     return;
                 }
@@ -352,35 +353,39 @@ namespace IronXNestCommand.Steam
                 try
                 {
                     _coopLeaveLobby.Invoke(null, null);
-                    IsInLobby = false;
-                    CurrentLobbyId = 0;
-                    CurrentLobbyShort = "";
-                    ConnectedPlayers.Clear();
                     LastStatusMessage = "Lobby verlassen.";
-                    FairnessGuard.SetMultiplayerState(false);
+                    OnLobbyLeft();
                     return;
                 }
                 catch { }
             }
 
-            if (!IsSteamAvailable || _mLeaveLobby == null || CurrentLobbyId == 0) return;
-
-            try
+            if (IsSteamAvailable && _mLeaveLobby != null && CurrentLobbyId != 0)
             {
-                object lobbyIdBoxed = Activator.CreateInstance(_cSteamIDType, CurrentLobbyId);
-                _mLeaveLobby.Invoke(null, new[] { lobbyIdBoxed });
-                IsInLobby = false;
-                CurrentLobbyId = 0;
-                ConnectedPlayers.Clear();
-                LastStatusMessage = "Lobby verlassen.";
-                FairnessGuard.SetMultiplayerState(false);
+                try
+                {
+                    object lobbyIdBoxed = Activator.CreateInstance(_cSteamIDType, CurrentLobbyId);
+                    _mLeaveLobby.Invoke(null, new[] { lobbyIdBoxed });
+                    LastStatusMessage = "Lobby verlassen.";
+                }
+                catch { }
             }
-            catch { }
+
+            OnLobbyLeft();
         }
 
+        // Nur der lokale Zustand-Reset, OHNE die native LeaveLobby-Methode erneut aufzurufen —
+        // wird vom Harmony-Postfix in MultiplayerPatches.LeaveLobby_Postfix aufgerufen, NACHDEM
+        // das native LeaveLobby bereits gelaufen ist. Ein erneuter Aufruf hier würde denselben
+        // Postfix wieder auslösen → unendliche Rekursion → StackOverflowException.
         public static void OnLobbyLeft()
         {
-            TryLeaveLobby();
+            IsInLobby = false;
+            CurrentLobbyId = 0;
+            CurrentLobbyShort = "";
+            ConnectedPlayers.Clear();
+            LastStatusMessage = "Lobby verlassen.";
+            FairnessGuard.SetMultiplayerState(false);
         }
 
         public static bool TryOpenInviteOverlay()
