@@ -15,8 +15,8 @@ namespace IronXNestCommand.Steam
             {
                 string name = mod.Info.Name.ToLower();
 
-                // Bekannte Co-op Mods prüfen
-                if (name.Contains("open nest") || name.Contains("synchrony") || name.Contains("iron nest co-op"))
+                // Bekannte Co-op Mods prüfen (nach Name oder Autor)
+                if (name.Contains("open nest") || name.Contains("synchrony") || name.Contains("iron nest co-op") || mod.Info.Author.ToLower().Contains("jager"))
                 {
                     OtherCoopModDetected = true;
                     DetectedModName = mod.Info.Name;
