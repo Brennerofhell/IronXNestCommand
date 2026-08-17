@@ -46,19 +46,24 @@ namespace IronXNestCommand
             CurrencyManager.Initialize();
 
             // 6. Rang- & Erfahrungssystem initialisieren
-            ProgressionManager.Initialize();
+            IronXNestCommand.Progression.ProgressionManager.Initialize();
 
-            // 7. Loadout-System initialisieren
+            // 7. Loadout-System & Notizen initialisieren
             LoadoutManager.Initialize();
+            IronXNestCommand.Notes.TargetNotesManager.Initialize();
 
             // 8. Steamworks Multiplayer-Erkennung initialisieren
             SteamworksDetector.Initialize();
+            Patches.MultiplayerPatches.TryApplyDynamicPatches(HarmonyInstance);
+            Patches.CoopPunchcardFix.InitializePatches(HarmonyInstance);
+            Patches.EnemyDespawnGuard.InitializePatches(HarmonyInstance);
 
             // 9. GUI Overlay initialisieren
             CommandOverlay.Initialize(Config);
 
             // 10. Reale Spiel-Hooks (Missionen, Shells, Requisition) scharfschalten
             IronXNestCommand.Patches.GameEventsPatch.InitializePatches(HarmonyInstance);
+            IronXNestCommand.Patches.AmmoInjectionPatch.InitializePatches(HarmonyInstance);
 
             MelonLogger.Msg("==================================================");
             MelonLogger.Msg($"[IronXNestCommand] Erfolgreich geladen! Drücke [{Config.ToggleKey}] für das Overlay.");

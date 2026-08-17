@@ -23,7 +23,7 @@ foreach ($candidate in @(
 }
 
 if (-not $dotnet) {
-    throw 'No .NET SDK found. Install .NET 6 SDK or place a portable SDK in tools\dotnet-sdk\.'
+    throw 'No .NET SDK found. Please install .NET SDK (https://aka.ms/dotnet/8.0/dotnet-sdk-win-x64.exe) or place a portable SDK in tools\dotnet-sdk\.'
 }
 
 Write-Host "Using $dotnet"
@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not (Test-Path $plugins)) {
-    throw "BepInEx plugins folder missing: $plugins"
+    New-Item -ItemType Directory -Path $plugins -Force | Out-Null
 }
 
 $hostOut = Join-Path $root 'IronXNestCommand.Host.BepInEx\bin\Release'

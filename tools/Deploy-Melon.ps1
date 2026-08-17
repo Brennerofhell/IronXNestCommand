@@ -33,7 +33,7 @@ foreach ($candidate in @(
 }
 
 if (-not $dotnet) {
-    throw 'No dotnet executable found. Please ensure .NET 6 SDK is installed.'
+    throw 'No dotnet executable found. Please install .NET SDK: https://aka.ms/dotnet/8.0/dotnet-sdk-win-x64.exe'
 }
 
 Write-Host "[DEPLOY] Using dotnet at: $dotnet"

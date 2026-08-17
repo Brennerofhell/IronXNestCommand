@@ -99,14 +99,14 @@ namespace IronXNestCommand.Patches
         private static void OnMissionCompletedPostfix()
         {
             MelonLogger.Msg("[GameEvents] In-Game Missionsabschluss registriert! Belohne Operator...");
-            ProgressionManager.RecordMissionFinished(true, 10, 8, 1);
+            IronXNestCommand.Progression.ProgressionManager.RecordMissionFinished(true, 10, 8, 1);
         }
 
         private static void OnShellLandedPostfix()
         {
             MelonLogger.Msg("[GameEvents] Shell-Einschlag registriert.");
             // Belohnt präzises Schießen
-            ProgressionManager.AddXP(25, "Shell Treffer");
+            IronXNestCommand.Progression.ProgressionManager.AddXP(25, "Shell Treffer");
             CurrencyManager.AddCurrency(CurrencyType.IntelPoints, 2);
         }
 

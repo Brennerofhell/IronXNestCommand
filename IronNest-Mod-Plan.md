@@ -159,13 +159,17 @@ UserData/IronXNestCommand/
 ---
 
 ## 9. Offene Punkte / Nächste Entscheidungen
-
+ 
 - [x] Endgültiger Mod-Name → **IronXNestCommand**
-- [ ] Genaue Rank-Tabelle mit XP-Anforderungen und Freischaltungen
-- [ ] Welche Boni genau pro Rank freigeschaltet werden
-- [ ] UI-Stil (einfaches IMGUI zuerst oder direkt aufwändiger)
-- [ ] Ob später Steam-Cloud-Sync für eigene Daten gewünscht ist
+- [x] Genaue Rank-Tabelle mit XP-Anforderungen und Freischaltungen (Level 1–7 integriert)
+- [x] Konkrete Boni pro Rank & Währungssystem (Intel, Tokens, Favor)
+- [x] IL2CPP-stabiles Dieselpunk-Overlay mit Drag & Drop und Quick-Toggles
+- [x] 100% stabiler Auto-Build- & Deploy-Prozess für .NET 8.0 SDK
+- [x] Cloud-sichere Datenspeicherung unter `UserData/IronXNestCommand/`
+- [ ] In-Game Cockpit Mini-HUD (Always-on Teleprinter)
+- [ ] In-Game Loadout Preset Creator & Re-Supply Besteller
+- [ ] Ballistisches Notizbuch (`notes.json`)
 
 ---
 
-*Dieses Dokument fasst den bisherigen Konzeptionsstand zusammen und dient als Grundlage für die Umsetzung.*
+*Dieses Dokument fasst den aktuellen Projektstand zusammen und dient als Entwicklungs-Roadmap.*

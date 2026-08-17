@@ -1,495 +1,718 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MelonLoader;
 using IronXNestCommand.Ammo;
 using IronXNestCommand.Core;
-using IronXNestCommand.Economy;
-using IronXNestCommand.Progression;
+using IronXNestCommand.Patches;
 using IronXNestCommand.Steam;
 
 namespace IronXNestCommand.UI
 {
+    /// <summary>
+    /// IronXNestCommand // Lobby & Besatzung (MelonLoader Modus)
+    /// 1:1 Pixel- und Token-getreue Umsetzung der offiziellen GUI-Vorlage.
+    /// Reines Co-op Lobby- & Besatzungs-Management mit Lochkarten-Sync für Iron Nest.
+    /// </summary>
     public static class CommandOverlay
     {
         public static bool IsVisible { get; set; } = true;
-        public static ModConfig Config { get; set; } = new ModConfig();
+        public static ModConfig Config { get; set; } = new();
 
-        private static int _activeTab = 0;
-        private static readonly string[] TabNames = { "STATUS", "ADVISOR", "ECONOMY", "RANKS", "CONFIG" };
+        // ── Window Layout (520px Breite gemäß Vorlage) ─────────────────────────
+        private static Rect _windowRect = new(60, 60, 520, 480);
+        private static bool _isDragging = false;
+        private static Vector2 _dragOffset = Vector2.zero;
 
-        private static TargetCategory _selectedTarget = TargetCategory.MediumArmor;
-        private static Vector2 _scrollPos = Vector2.zero;
+        // ── Tabs ───────────────────────────────────────────────────────────────
+        private static int _activeTab = 0; // 0 = Lobby & Besatzung, 1 = Einstellungen
+        private static readonly string[] TabNames = { "🌐 LOBBY & BESATZUNG", "⚙️ EINSTELLUNGEN" };
 
-        private static Texture2D _texBg;
-        private static Texture2D _texHeader;
-        private static Texture2D _texButton;
-        private static Texture2D _texButtonActive;
-        private static Texture2D _texProgressBarBg;
-        private static Texture2D _texProgressBarFill;
+        // ── State & Animations ─────────────────────────────────────────────────
+        private static string _lobbyIdInput = "";
+        private static bool _joinInputMode = false;
+        private static bool _copiedFeedback = false;
+        private static float _copiedTimer = 0f;
+        private static bool _syncing = false;
+        private static float _syncTimer = 0f;
+        private static float _lastSyncTime = 0f;
 
+        // Notification Banner
+        private static string _notificationText = "";
+        private static float _notificationTimer = 0f;
+
+        // ── Textures & Color Palette (#0E0E10 / #18181B / #D97757) ─────────────
+        private static Texture2D _texMasterBg;
+        private static Texture2D _texCardBg;
+        private static Texture2D _texCardDashed;
+        private static Texture2D _texFooterBg;
+        private static Texture2D _texTerracotta;
+        private static Texture2D _texTerracottaHover;
+        private static Texture2D _texBadgeBg;
+        private static Texture2D _texButtonDark;
+        private static Texture2D _texButtonDarkHover;
+        private static Texture2D _texBorder;
+        private static Texture2D _texDotGreen;
+        private static Texture2D _texDotGrey;
+
+        // ── GUIStyles (100% IL2CPP-kompatibel) ──────────────────────────────────
         private static GUIStyle _titleStyle;
-        private static GUIStyle _headerStyle;
-        private static GUIStyle _textStyle;
-        private static GUIStyle _highlightStyle;
-        private static GUIStyle _mutedStyle;
-        private static GUIStyle _dangerStyle;
-        private static GUIStyle _tabButtonStyle;
-        private static GUIStyle _activeTabButtonStyle;
-        private static GUIStyle _actionButtonStyle;
-        private static GUIStyle _boxStyle;
+        private static GUIStyle _subtitleStyle;
+        private static GUIStyle _sectionHeaderStyle;
+        private static GUIStyle _lobbyCodeStyle;
+        private static GUIStyle _lobbySubtextStyle;
+        private static GUIStyle _memberNameStyle;
+        private static GUIStyle _memberRoleStyle;
+        private static GUIStyle _badgeInitialStyle;
+        private static GUIStyle _emptySlotStyle;
+        private static GUIStyle _statusPillStyle;
+        private static GUIStyle _btnTerracottaStyle;
+        private static GUIStyle _btnOutlineStyle;
+        private static GUIStyle _btnDarkStyle;
+        private static GUIStyle _footerTextStyle;
+        private static GUIStyle _hotkeyStyle;
+        private static GUIStyle _notificationStyle;
 
-        private static Rect _windowRect = new Rect(25, 25, 620, 480);
         private static bool _stylesInitialized = false;
 
         public static void Initialize(ModConfig config)
         {
             Config = config ?? new ModConfig();
             IsVisible = Config.StartVisible;
+            AudioFeedback.Initialize();
+            AmmoRequisitionBridge.Initialize();
         }
 
         public static void Update()
         {
+            float dt = Time.unscaledDeltaTime;
+
             if (CheckToggleKey())
-            {
                 IsVisible = !IsVisible;
+
+            if (_copiedTimer > 0f)
+            {
+                _copiedTimer -= dt;
+                if (_copiedTimer <= 0f)
+                    _copiedFeedback = false;
             }
+
+            if (_syncing)
+            {
+                _syncTimer -= dt;
+                if (_syncTimer <= 0f)
+                {
+                    _syncing = false;
+                    _lastSyncTime = Time.unscaledTime;
+                }
+            }
+
+            if (_notificationTimer > 0f)
+            {
+                _notificationTimer -= dt;
+                if (_notificationTimer <= 0f)
+                    _notificationText = "";
+            }
+
+            CoopPunchcardFix.UpdateWatchdog(dt);
+            EnemyDespawnGuard.UpdateWatchdog(dt);
+        }
+
+        public static void ShowNotification(string text, float duration = 2.5f)
+        {
+            _notificationText = text;
+            _notificationTimer = duration;
         }
 
         public static void OnGUI()
         {
-            if (!IsVisible)
-                return;
+            if (!IsVisible) return;
 
             EnsureStyles();
 
-            _windowRect = GUI.Window(889102, _windowRect, (GUI.WindowFunction)DrawWindowContent, "IRON X NEST COMMAND // OPERATOR CONSOLE");
-        }
-
-        private static void DrawWindowContent(int windowId)
-        {
-            GUI.DragWindow(new Rect(0, 0, _windowRect.width - 40, 24));
-
-            if (GUI.Button(new Rect(_windowRect.width - 32, 4, 24, 18), "X", _actionButtonStyle))
+            var currentEvent = Event.current;
+            if (currentEvent != null && currentEvent.isMouse)
             {
-                IsVisible = false;
+                Rect titleBarRect = new(_windowRect.x, _windowRect.y, _windowRect.width - 40, 48);
+                if (currentEvent.type == EventType.MouseDown && titleBarRect.Contains(currentEvent.mousePosition))
+                {
+                    _isDragging = true;
+                    _dragOffset = currentEvent.mousePosition - new Vector2(_windowRect.x, _windowRect.y);
+                }
+                else if (currentEvent.type == EventType.MouseUp)
+                {
+                    _isDragging = false;
+                }
+                else if (_isDragging && currentEvent.type == EventType.MouseDrag)
+                {
+                    _windowRect.x = Mathf.Clamp(currentEvent.mousePosition.x - _dragOffset.x, 10, Mathf.Max(100, Screen.width - _windowRect.width - 10));
+                    _windowRect.y = Mathf.Clamp(currentEvent.mousePosition.y - _dragOffset.y, 10, Mathf.Max(100, Screen.height - _windowRect.height - 10));
+                }
             }
 
-            GUILayout.Space(10);
+            float wx = _windowRect.x;
+            float wy = _windowRect.y;
+            float ww = _windowRect.width;
+            float wh = _windowRect.height;
 
-            // ================= TABS =================
-            GUILayout.BeginHorizontal();
+            // 1. Master Dialog Background (#18181B mit #27272A Border)
+            DrawBox(new Rect(wx, wy, ww, wh), _texMasterBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+
+            // 2. Header Bar
+            DrawHeader(wx, wy, ww);
+
+            // 3. Tab Switcher
+            float tabWidth = (ww - 36) / 2f;
+            float tabY = wy + 52;
             for (int i = 0; i < TabNames.Length; i++)
             {
-                var style = (i == _activeTab) ? _activeTabButtonStyle : _tabButtonStyle;
-                if (GUILayout.Button(TabNames[i], style, GUILayout.Height(28)))
+                bool active = (i == _activeTab);
+                var btnStyle = active ? _btnTerracottaStyle : _btnOutlineStyle;
+                if (DrawButton(new Rect(wx + 18 + (i * (tabWidth + 4)), tabY, tabWidth, 26), TabNames[i], btnStyle))
                 {
                     _activeTab = i;
+                    AudioFeedback.PlayClick();
                 }
             }
-            GUILayout.EndHorizontal();
 
-            GUILayout.Space(8);
+            DrawDivider(new Rect(wx + 18, tabY + 32, ww - 36, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
 
-            // Divider Line
-            DrawHorizontalLine(new Color(0.769f, 0.639f, 0.353f, 0.6f), 2);
-            GUILayout.Space(8);
+            // 4. Content Area
+            float cx = wx + 18;
+            float cy = tabY + 42;
+            float cw = ww - 36;
 
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Width(_windowRect.width - 25), GUILayout.Height(370));
-
-            switch (_activeTab)
+            if (_activeTab == 0)
             {
-                case 0:
-                    DrawStatusTab();
-                    break;
-                case 1:
-                    DrawAdvisorTab();
-                    break;
-                case 2:
-                    DrawEconomyTab();
-                    break;
-                case 3:
-                    DrawProgressionTab();
-                    break;
-                case 4:
-                    DrawConfigTab();
-                    break;
+                DrawLobbyCrewContent(cx, cy, cw);
+            }
+            else
+            {
+                DrawSettingsContent(cx, cy, cw);
             }
 
-            GUILayout.EndScrollView();
+            // 5. Notification Banner
+            if (!string.IsNullOrEmpty(_notificationText) && _notificationTimer > 0f)
+            {
+                float bannerW = 380;
+                float bannerX = wx + (ww - bannerW) / 2f;
+                float bannerY = wy + wh - 64;
+                DrawBox(new Rect(bannerX, bannerY, bannerW, 26), _texTerracotta, Color.white);
+                GUI.Label(new Rect(bannerX + 10, bannerY + 4, bannerW - 20, 18), _notificationText, _notificationStyle);
+            }
 
-            // Footer
-            GUILayout.Space(4);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"[Hotkey: {Config.ToggleKey}]", _mutedStyle);
-            GUILayout.FlexibleSpace();
-            var rank = ProgressionManager.GetCurrentRank();
-            GUILayout.Label($"Operator: {rank.Title} · Level {rank.Level}", _highlightStyle);
-            GUILayout.EndHorizontal();
+            // 6. Footer Status Bar
+            DrawFooter(wx, wy + wh - 34, ww);
         }
 
-        // ==================== TAB 1: STATUS ====================
-        private static void DrawStatusTab()
+        // ==================== HEADER BAR ====================
+        private static void DrawHeader(float wx, float wy, float ww)
         {
-            GUILayout.Label("SYSTEM & MULTIPLAYER STATUS", _headerStyle);
-            GUILayout.Space(4);
+            // Accent Terracotta Icon (26x26 mit innerem Kreis)
+            DrawBox(new Rect(wx + 18, wy + 12, 26, 26), _texTerracotta, new Color(0.851f, 0.467f, 0.341f, 1f));
+            DrawBox(new Rect(wx + 25, wy + 19, 12, 12), _texMasterBg, new Color(0.094f, 0.094f, 0.106f, 1f));
 
-            GUILayout.BeginVertical(_boxStyle);
-            
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("FairnessGuard Status:", _textStyle, GUILayout.Width(180));
-            if (FairnessGuard.IsMultiplayerActive)
-            {
-                GUILayout.Label("● MULTIPLAYER AKTIV (Cheatschutz an)", _dangerStyle);
-            }
-            else
-            {
-                GUILayout.Label("● SINGLEPLAYER (Alle Funktionen aktiv)", _highlightStyle);
-            }
-            GUILayout.EndHorizontal();
+            // Title & Subtitle
+            GUI.Label(new Rect(wx + 52, wy + 10, 200, 18), "IronXNestCommand", _titleStyle);
+            GUI.Label(new Rect(wx + 52, wy + 26, 200, 14), "LOBBY & BESATZUNG", _subtitleStyle);
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Steam-Lobby:", _textStyle, GUILayout.Width(180));
-            if (SteamworksDetector.IsInLobby)
-            {
-                GUILayout.Label($"Lobby ID: {SteamworksDetector.CurrentLobbyId}", _textStyle);
-            }
-            else
-            {
-                GUILayout.Label("Keine aktive Steam-Lobby", _mutedStyle);
-            }
-            GUILayout.EndHorizontal();
+            bool online = SteamworksDetector.IsInLobby;
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Erkannte Co-op Mods:", _textStyle, GUILayout.Width(180));
-            if (ModCompatibility.OtherCoopModDetected)
-            {
-                GUILayout.Label($"Ja ({ModCompatibility.DetectedModName})", _highlightStyle);
-            }
-            else
-            {
-                GUILayout.Label("Keine (Eigenständiger Betrieb)", _mutedStyle);
-            }
-            GUILayout.EndHorizontal();
+            // Status Pill (99px Rounded Pill)
+            float pillW = 110;
+            float pillX = wx + ww - pillW - 60;
+            float pillY = wy + 14;
+            DrawBox(new Rect(pillX, pillY, pillW, 24), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
 
-            if (SteamworksDetector.ConnectedPlayers.Count > 0)
+            Texture2D dotTex = online ? _texDotGreen : _texDotGrey;
+            GUI.DrawTexture(new Rect(pillX + 10, pillY + 9, 6, 6), dotTex);
+
+            string statusLabel = online ? "Lobby offen" : "Keine Lobby";
+            GUI.Label(new Rect(pillX + 22, pillY + 4, pillW - 26, 16), statusLabel, _statusPillStyle);
+
+            // Hotkey Hint [F8]
+            GUI.Label(new Rect(wx + ww - 52, wy + 17, 24, 16), Config.ToggleKey ?? "F8", _hotkeyStyle);
+
+            // Close Button [✕]
+            if (DrawButton(new Rect(wx + ww - 28, wy + 14, 20, 20), "✕", _btnDarkStyle))
             {
-                GUILayout.Space(6);
-                GUILayout.Label("Mitspieler in der Sitzung:", _textStyle);
-                foreach (var player in SteamworksDetector.ConnectedPlayers)
+                IsVisible = false;
+                AudioFeedback.PlayClick();
+            }
+
+            // Bottom line under header
+            DrawDivider(new Rect(wx, wy + 48, ww, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
+        }
+
+        // ==================== TAB 0: LOBBY & BESATZUNG CONTENT ====================
+        private static void DrawLobbyCrewContent(float x, float y, float w)
+        {
+            bool inLobby = SteamworksDetector.IsInLobby;
+            string rawShort = SteamworksDetector.CurrentLobbyShort?.Trim() ?? "";
+            string formattedCode = FormatLobbyCode(rawShort);
+            var players = SteamworksDetector.ConnectedPlayers;
+            int maxSlots = 4;
+
+            // ── 1. STEAM-LOBBY SECTION ──────────────────────────────────────────
+            GUI.Label(new Rect(x, y, w, 14), "STEAM-LOBBY", _sectionHeaderStyle);
+            y += 18;
+
+            if (!inLobby && !_joinInputMode)
+            {
+                // Unconnected State (Dashed Container)
+                DrawBox(new Rect(x, y, w, 78), _texCardDashed, new Color(0.153f, 0.153f, 0.165f, 0.8f));
+                GUI.Label(new Rect(x + 14, y + 10, w - 28, 20), "Noch keine Lobby aktiv. Erzeuge eine Hex-ID oder trete einer Besatzung bei.", _lobbySubtextStyle);
+
+                float btnHalf = (w - 36) / 2f;
+                if (DrawButton(new Rect(x + 14, y + 36, btnHalf, 30), "➕ Lobby-ID generieren", _btnTerracottaStyle))
                 {
-                    GUILayout.Label($"  - {player}", _mutedStyle);
+                    SteamworksDetector.TryCreateLobby(maxSlots);
+                    AudioFeedback.PlayLevelUp();
+                    ShowNotification("⏳ Erstelle neue Co-op Lobby...");
                 }
-            }
 
-            GUILayout.EndVertical();
-
-            GUILayout.Space(12);
-            GUILayout.Label("TEST & SIMULATION (Schnelltest)", _headerStyle);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Missionssieg simulieren (+250 XP, +Tokens)", _actionButtonStyle, GUILayout.Height(28)))
-            {
-                ProgressionManager.RecordMissionFinished(true, 15, 12, 2);
-            }
-            if (GUILayout.Button("Multiplayer Toggle", _actionButtonStyle, GUILayout.Height(28)))
-            {
-                FairnessGuard.SetMultiplayerState(!FairnessGuard.IsMultiplayerActive);
-            }
-            GUILayout.EndHorizontal();
-        }
-
-        // ==================== TAB 2: ADVISOR & LOADOUTS ====================
-        private static void DrawAdvisorTab()
-        {
-            GUILayout.Label("BALLISTISCHER AMMO ADVISOR", _headerStyle);
-            GUILayout.Label("Wähle den Zieltyp zur automatischen Berechnung der optimalen Ladung:", _mutedStyle);
-            GUILayout.Space(6);
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Infanterie", _selectedTarget == TargetCategory.InfantrySquad ? _activeTabButtonStyle : _actionButtonStyle))
-                _selectedTarget = TargetCategory.InfantrySquad;
-            if (GUILayout.Button("Spähwagen", _selectedTarget == TargetCategory.LightVehicle ? _activeTabButtonStyle : _actionButtonStyle))
-                _selectedTarget = TargetCategory.LightVehicle;
-            if (GUILayout.Button("Panzer", _selectedTarget == TargetCategory.MediumArmor ? _activeTabButtonStyle : _actionButtonStyle))
-                _selectedTarget = TargetCategory.MediumArmor;
-            if (GUILayout.Button("Bunker", _selectedTarget == TargetCategory.HeavyBunker ? _activeTabButtonStyle : _actionButtonStyle))
-                _selectedTarget = TargetCategory.HeavyBunker;
-            if (GUILayout.Button("Artillerie", _selectedTarget == TargetCategory.CounterBatteryArtillery ? _activeTabButtonStyle : _actionButtonStyle))
-                _selectedTarget = TargetCategory.CounterBatteryArtillery;
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(8);
-
-            var rec = AmmoAdvisor.GetRecommendation(_selectedTarget);
-            GUILayout.BeginVertical(_boxStyle);
-            GUILayout.Label($"ZIELANALYSE: {rec.TargetName.ToUpper()}", _headerStyle);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Empfohlene Shell:", _textStyle, GUILayout.Width(150));
-            GUILayout.Label(rec.RecommendedShellName, _highlightStyle);
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Treibladung (Powder):", _textStyle, GUILayout.Width(150));
-            GUILayout.Label($"{rec.RecommendedPowderCharges} Ladungen", _highlightStyle);
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Durchschlagsklasse:", _textStyle, GUILayout.Width(150));
-            GUILayout.Label(rec.PenetrationRating, _textStyle);
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(4);
-            GUILayout.Label($"Taktischer Hinweis: {rec.TacticalAdvice}", _mutedStyle);
-            GUILayout.EndVertical();
-
-            GUILayout.Space(10);
-            GUILayout.Label("REGISTRIERTE CUSTOM SHELLS", _headerStyle);
-            foreach (var shell in CustomShellManager.GetAllCustomShells())
-            {
-                GUILayout.BeginVertical(_boxStyle);
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"[ {shell.Name} ]", _highlightStyle);
-                GUILayout.FlexibleSpace();
-                GUILayout.Label($"Kosten: {shell.RequisitionCost} Req" + (shell.CommandFavorCost > 0 ? $" / {shell.CommandFavorCost} Favor" : ""), _mutedStyle);
-                GUILayout.EndHorizontal();
-                GUILayout.Label($"Schaden: {shell.KineticDamage} Kin / {shell.ExplosiveDamage} Exp · Durchschlag: {shell.ArmorPenetration}mm · Radius: {shell.BlastRadius}m", _textStyle);
-                GUILayout.Label(shell.Description, _mutedStyle);
-                GUILayout.EndVertical();
-            }
-        }
-
-        // ==================== TAB 3: ECONOMY ====================
-        private static void DrawEconomyTab()
-        {
-            GUILayout.Label("LOGISTIK & RESSOURCEN-KONTEN", _headerStyle);
-            GUILayout.Space(6);
-
-            var balances = CurrencyManager.CurrentBalances;
-
-            GUILayout.BeginHorizontal();
-
-            // Intel Points Box
-            GUILayout.BeginVertical(_boxStyle, GUILayout.Width(180));
-            GUILayout.Label("📡 INTEL POINTS", _headerStyle);
-            GUILayout.Label($"{balances.IntelPoints}", _highlightStyle);
-            GUILayout.Label("Aufklärung & Spotting", _mutedStyle);
-            if (GUILayout.Button("+25 Intel (Test)", _actionButtonStyle))
-                CurrencyManager.AddCurrency(CurrencyType.IntelPoints, 25);
-            GUILayout.EndVertical();
-
-            // Logistics Tokens Box
-            GUILayout.BeginVertical(_boxStyle, GUILayout.Width(180));
-            GUILayout.Label("📦 LOGISTICS TOKENS", _headerStyle);
-            GUILayout.Label($"{balances.LogisticsTokens}", _highlightStyle);
-            GUILayout.Label("Loadouts & Schnellnachschub", _mutedStyle);
-            if (GUILayout.Button("+5 Tokens (Test)", _actionButtonStyle))
-                CurrencyManager.AddCurrency(CurrencyType.LogisticsTokens, 5);
-            GUILayout.EndVertical();
-
-            // Command Favor Box
-            GUILayout.BeginVertical(_boxStyle, GUILayout.Width(180));
-            GUILayout.Label("⭐ COMMAND FAVOR", _headerStyle);
-            GUILayout.Label($"{balances.CommandFavor}", _highlightStyle);
-            GUILayout.Label("Experimentelle Shells & Gun", _mutedStyle);
-            if (GUILayout.Button("+1 Favor (Test)", _actionButtonStyle))
-                CurrencyManager.AddCurrency(CurrencyType.CommandFavor, 1);
-            GUILayout.EndVertical();
-
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(14);
-            GUILayout.Label("AKTIVES LOADOUT-PRESET", _headerStyle);
-            var activePreset = LoadoutManager.GetActivePreset();
-            if (activePreset != null)
-            {
-                GUILayout.BeginVertical(_boxStyle);
-                GUILayout.Label($"Name: {activePreset.Name}", _highlightStyle);
-                GUILayout.Label($"Beschreibung: {activePreset.Description}", _textStyle);
-                GUILayout.Space(4);
-                GUILayout.Label("Enthaltene Munition:", _mutedStyle);
-                foreach (var item in activePreset.Items)
+                if (DrawButton(new Rect(x + 22 + btnHalf, y + 36, btnHalf, 30), "📥 Lobby Beitreten", _btnOutlineStyle))
                 {
-                    GUILayout.Label($"  - {item.Quantity}x {item.ShellId} (Standard-Ladung: {item.DefaultPowderCharges}x)", _textStyle);
+                    _joinInputMode = true;
+                    AudioFeedback.PlayClick();
                 }
-                GUILayout.EndVertical();
+                y += 88;
             }
-        }
-
-        // ==================== TAB 4: PROGRESSION ====================
-        private static void DrawProgressionTab()
-        {
-            var rank = ProgressionManager.GetCurrentRank();
-            var nextRank = ProgressionManager.GetNextRank();
-            var data = ProgressionManager.Data;
-
-            GUILayout.Label("OPERATOR PROGRESSION & RÄNGE", _headerStyle);
-            GUILayout.Space(4);
-
-            GUILayout.BeginVertical(_boxStyle);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"AKTUELLER RANG: [ LEVEL {rank.Level} ]", _headerStyle);
-            GUILayout.FlexibleSpace();
-            GUILayout.Label($"{rank.Title.ToUpper()}", _highlightStyle);
-            GUILayout.EndHorizontal();
-            GUILayout.Label(rank.Description, _textStyle);
-
-            GUILayout.Space(8);
-
-            // XP Progress Bar
-            float progress = ProgressionManager.GetProgressToNextRank();
-            GUILayout.Label($"Erfahrung: {data.TotalXP} XP " + (nextRank != null ? $"/ {nextRank.RequiredXP} XP (Nächster Rang: {nextRank.Title})" : "(MAXIMALER RANG)"), _textStyle);
-
-            DrawProgressBar(progress);
-
-            GUILayout.Space(6);
-            GUILayout.Label("Freigeschaltete Fähigkeiten:", _mutedStyle);
-            foreach (var perk in rank.UnlockedPerks)
+            else if (!inLobby && _joinInputMode)
             {
-                GUILayout.Label($"  ✔ {perk}", _textStyle);
-            }
-            GUILayout.EndVertical();
+                // Join Input Box
+                DrawBox(new Rect(x, y, w, 84), _texCardBg, new Color(0.247f, 0.247f, 0.275f, 1f));
+                GUI.Label(new Rect(x + 14, y + 8, w - 28, 16), "Lobby Hex-Code oder 64-Bit Steam-ID eingeben:", _lobbySubtextStyle);
 
-            GUILayout.Space(10);
-            GUILayout.Label("LEBENSZEIT-STATISTIKEN", _headerStyle);
-            GUILayout.BeginVertical(_boxStyle);
-            GUILayout.Label($"Erfolgreiche Missionen: {data.MissionsCompleted}", _textStyle);
-            GUILayout.Label($"Verschossene Shells: {data.ShellsFired}", _textStyle);
-            GUILayout.Label($"Direkttreffer: {data.DirectHits} (Quote: {data.AccuracyPercentage:F1}%)", _highlightStyle);
-            GUILayout.Label($"Zerstörte Feind-Artillerie: {data.CounterBatteryKills}", _textStyle);
-            GUILayout.EndVertical();
+                DrawBox(new Rect(x + 14, y + 28, w - 170, 28), _texMasterBg, new Color(0.247f, 0.247f, 0.275f, 1f));
+                string disp = string.IsNullOrEmpty(_lobbyIdInput) ? "<Hex-Code oder ID>" : _lobbyIdInput;
+                GUI.Label(new Rect(x + 22, y + 32, w - 186, 20), disp, string.IsNullOrEmpty(_lobbyIdInput) ? _lobbySubtextStyle : _memberNameStyle);
+
+                if (DrawButton(new Rect(x + w - 150, y + 28, 64, 28), "📋 Paste", _btnOutlineStyle))
+                {
+                    string clip = GUIUtility.systemCopyBuffer?.Trim() ?? "";
+                    if (!string.IsNullOrEmpty(clip))
+                    {
+                        _lobbyIdInput = clip;
+                        AudioFeedback.PlayClick();
+                        ShowNotification($"📋 Code eingefügt: {clip}");
+                    }
+                }
+
+                bool hasInput = !string.IsNullOrWhiteSpace(_lobbyIdInput);
+                if (DrawButton(new Rect(x + w - 82, y + 28, 70, 28), "Beitreten", hasInput ? _btnTerracottaStyle : _btnDarkStyle))
+                {
+                    if (hasInput)
+                    {
+                        SteamworksDetector.TryJoinLobby(_lobbyIdInput);
+                        AudioFeedback.PlayClick();
+                        ShowNotification($"⏳ Trete '{_lobbyIdInput.Trim()}' bei...");
+                    }
+                }
+
+                if (DrawButton(new Rect(x + 14, y + 60, 100, 18), "← Zurück", _btnDarkStyle))
+                {
+                    _joinInputMode = false;
+                    AudioFeedback.PlayClick();
+                }
+                y += 94;
+            }
+            else
+            {
+                // Active Lobby State (Large Hex-ID + Kopieren + Einladen)
+                float boxH = 44;
+                DrawBox(new Rect(x, y, w - 180, boxH), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+                GUI.Label(new Rect(x + 14, y + 10, w - 240, 24), string.IsNullOrEmpty(formattedCode) ? "· · · ·" : formattedCode, _lobbyCodeStyle);
+                GUI.Label(new Rect(x + w - 230, y + 14, 45, 16), "Hex-ID", _subtitleStyle);
+
+                string copyLabel = _copiedFeedback ? "✔ Kopiert" : "Kopieren";
+                if (DrawButton(new Rect(x + w - 172, y, 84, boxH), copyLabel, _btnTerracottaStyle))
+                {
+                    GUIUtility.systemCopyBuffer = string.IsNullOrEmpty(rawShort) ? formattedCode : rawShort;
+                    _copiedFeedback = true;
+                    _copiedTimer = 1.8f;
+                    AudioFeedback.PlaySuccess();
+                    ShowNotification("✔ Lobby-Code in Zwischenablage kopiert!");
+                }
+
+                if (DrawButton(new Rect(x + w - 82, y, 82, boxH), "Einladen", _btnOutlineStyle))
+                {
+                    if (SteamworksDetector.TryOpenInviteOverlay())
+                    {
+                        ShowNotification("👥 Steam Einladungs-Overlay geöffnet!");
+                    }
+                    else
+                    {
+                        GUIUtility.systemCopyBuffer = rawShort;
+                        ShowNotification($"✔ Code '{rawShort}' kopiert!");
+                    }
+                    AudioFeedback.PlayClick();
+                }
+
+                y += boxH + 6;
+                GUI.Label(new Rect(x, y, w - 90, 16), "Code an deine Besatzung weitergeben. Beitritt erfolgt direkt über das Steam-Overlay.", _lobbySubtextStyle);
+
+                if (DrawButton(new Rect(x + w - 82, y - 2, 82, 20), "🚪 Verlassen", _btnDarkStyle))
+                {
+                    SteamworksDetector.TryLeaveLobby();
+                    AudioFeedback.PlayClick();
+                    ShowNotification("🚪 Lobby verlassen.");
+                }
+                y += 24;
+            }
+
+            // Divider
+            DrawDivider(new Rect(x, y, w, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
+            y += 12;
+
+            // ── 2. BESATZUNG SECTION ────────────────────────────────────────────
+            int crewCount = players.Count > 0 ? players.Count : (inLobby ? 1 : 0);
+            string crewCountText = $"{crewCount} / {maxSlots}";
+
+            GUI.Label(new Rect(x, y, 100, 14), "BESATZUNG", _sectionHeaderStyle);
+            GUI.Label(new Rect(x + w - 80, y, 80, 14), crewCountText, _hotkeyStyle);
+            y += 18;
+
+            if (players.Count == 0 && !inLobby)
+            {
+                // Offline / Einzelspieler Slot
+                DrawMemberCard(x, y, w, "Du (Operator)", "HM", "👑 Kommandant (Lokal) · 0 ms", isHost: true);
+                y += 44;
+            }
+            else
+            {
+                for (int i = 0; i < players.Count; i++)
+                {
+                    string pName = players[i];
+                    string initials = GetInitials(pName);
+                    string role = i == 0 ? "👑 Kommandant (Host) · 28 ms" : (i == 1 ? "🎯 Richtschütze · 34 ms" : (i == 2 ? "📦 Ladeschütze · 45 ms" : "🔭 Beobachter · 39 ms"));
+                    DrawMemberCard(x, y, w, pName, initials, role, isHost: (i == 0));
+                    y += 44;
+                }
+            }
+
+            // Freier Platz an Rohr wenn weniger als maxSlots
+            if (crewCount < maxSlots)
+            {
+                int freeSlot = crewCount + 1;
+                DrawBox(new Rect(x, y, w, 36), _texCardDashed, new Color(0.153f, 0.153f, 0.165f, 0.8f));
+                GUI.Label(new Rect(x, y + 9, w, 18), $"Freier Platz an Rohr {freeSlot}", _emptySlotStyle);
+                y += 42;
+            }
+
+            y += 4;
+
+            // ── 3. RE-SYNC ACTION ROW ───────────────────────────────────────────
+            string resyncLabel = _syncing ? "⏳ Synchronisiere …" : "🔄 Besatzung re-syncen";
+            if (DrawButton(new Rect(x, y, 170, 32), resyncLabel, _btnOutlineStyle))
+            {
+                _syncing = true;
+                _syncTimer = 1.0f;
+                AmmoRequisitionBridge.TriggerCoopResync();
+                PunchcardSpawner.EnsureGuestFireMissionCard();
+                AudioFeedback.PlaySuccess();
+                ShowNotification("🔄 Lochkarten & Raum-Sync ausgeführt!");
+            }
+
+            float secondsAgo = _lastSyncTime > 0 ? (Time.unscaledTime - _lastSyncTime) : 4f;
+            string stampText = _syncing ? "…" : $"Sync vor {Mathf.Max(1, (int)secondsAgo)} s";
+            GUI.Label(new Rect(x + w - 120, y + 8, 120, 16), stampText, _hotkeyStyle);
         }
 
-        // ==================== TAB 5: CONFIG ====================
-        private static void DrawConfigTab()
+        // ==================== TAB 1: EINSTELLUNGEN CONTENT ====================
+        private static void DrawSettingsContent(float x, float y, float w)
         {
-            GUILayout.Label("MOD-EINSTELLUNGEN", _headerStyle);
-            GUILayout.Space(6);
+            GUI.Label(new Rect(x, y, w, 14), "EINSTELLUNGEN & TASTENBELEGUNG", _sectionHeaderStyle);
+            y += 20;
 
-            GUILayout.BeginVertical(_boxStyle);
+            DrawBox(new Rect(x, y, w, 192), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            float iy = y + 14;
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Overlay-Umschalttaste:", _textStyle, GUILayout.Width(220));
-            Config.ToggleKey = GUILayout.TextField(Config.ToggleKey, GUILayout.Width(60));
-            GUILayout.EndHorizontal();
+            GUI.Label(new Rect(x + 14, iy, 180, 22), "Lobby-Overlay Hotkey:", _memberNameStyle);
+            if (DrawButton(new Rect(x + 200, iy, 75, 24), $"[ {Config.ToggleKey} ]", _btnTerracottaStyle))
+            {
+                Config.ToggleKey = Config.ToggleKey switch
+                {
+                    "F8" => "F7",
+                    "F7" => "F9",
+                    "F9" => "F10",
+                    "F10" => "F11",
+                    "F11" => "F12",
+                    _ => "F8"
+                };
+                AudioFeedback.PlayClick();
+                ShowNotification($"Hotkey geändert auf: {Config.ToggleKey}");
+            }
+            GUI.Label(new Rect(x + 285, iy, 140, 22), "(Klick zum Wechseln)", _lobbySubtextStyle);
 
-            GUILayout.Space(6);
-            Config.StartVisible = GUILayout.Toggle(Config.StartVisible, " Overlay beim Spielstart direkt anzeigen", _textStyle);
-            Config.AutoAdvisorEnabled = GUILayout.Toggle(Config.AutoAdvisorEnabled, " Automatischer Ammo Advisor aktiv", _textStyle);
-            Config.DisableInMultiplayer = GUILayout.Toggle(Config.DisableInMultiplayer, " Strenge Fairness im Co-op (Empfohlen)", _textStyle);
-            Config.SoundFeedbackEnabled = GUILayout.Toggle(Config.SoundFeedbackEnabled, " Audio-Feedback bei Advisor-Änderungen", _textStyle);
+            iy += 36;
+            Config.PreventEnemyDespawn = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.PreventEnemyDespawn, "🛡️ Gegner-Despawn Schutz (Permanente Ziel-Sichtbarkeit)");
 
-            GUILayout.Space(10);
-            if (GUILayout.Button("Einstellungen speichern", _actionButtonStyle, GUILayout.Height(28)))
+            iy += 32;
+            Config.StartVisible = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.StartVisible, "Lobbymenü beim Spielstart direkt anzeigen");
+
+            iy += 32;
+            Config.SoundFeedbackEnabled = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.SoundFeedbackEnabled, "Audio-Rückmeldung bei Klicks & Aktionen");
+
+            y += 204;
+            if (DrawButton(new Rect(x, y, w, 32), "💾 EINSTELLUNGEN SPEICHERN", _btnTerracottaStyle))
             {
                 SaveManager.SaveConfig(Config);
+                AudioFeedback.PlaySuccess();
+                ShowNotification("✔ Einstellungen gespeichert!");
             }
-            GUILayout.EndVertical();
         }
 
-        // ==================== HELPERS & STYLING ====================
-        private static void DrawProgressBar(float progress)
+        // ==================== MEMBER CARD RENDERER ====================
+        private static void DrawMemberCard(float x, float y, float w, string name, string initials, string rolePing, bool isHost)
         {
-            var rect = GUILayoutUtility.GetRect(GUILayoutUtility.GetLastRect().width, 16);
-            GUI.DrawTexture(rect, _texProgressBarBg);
-            var fillRect = new Rect(rect.x + 1, rect.y + 1, (rect.width - 2) * Math.Clamp(progress, 0f, 1f), rect.height - 2);
-            GUI.DrawTexture(fillRect, _texProgressBarFill);
+            float cardH = 40;
+            DrawBox(new Rect(x, y, w, cardH), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+
+            // Initials Avatar Badge (26x26)
+            DrawBox(new Rect(x + 8, y + 7, 26, 26), _texBadgeBg, new Color(0.247f, 0.247f, 0.275f, 1f));
+            GUI.Label(new Rect(x + 8, y + 10, 26, 20), initials, _badgeInitialStyle);
+
+            // Name & Role
+            GUI.Label(new Rect(x + 42, y + 4, w - 50, 18), name, _memberNameStyle);
+            GUI.Label(new Rect(x + 42, y + 20, w - 50, 16), rolePing, isHost ? _memberRoleStyle : _subtitleStyle);
         }
 
-        private static void DrawHorizontalLine(Color color, float height)
+        // ==================== FOOTER STATUS BAR ====================
+        private static void DrawFooter(float wx, float wy, float ww)
         {
-            var rect = GUILayoutUtility.GetRect(GUILayoutUtility.GetLastRect().width, height);
+            DrawBox(new Rect(wx, wy, ww, 34), _texFooterBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+
+            bool online = SteamworksDetector.IsInLobby;
+            Texture2D dotTex = online ? _texDotGreen : _texDotGrey;
+            GUI.DrawTexture(new Rect(wx + 18, wy + 14, 5, 5), dotTex);
+
+            string syncState = _syncing ? "SYNC LÄUFT" : (online ? "SYNCHRON" : "IM LEERLAUF");
+            GUI.Label(new Rect(wx + 28, wy + 9, 85, 16), syncState, _footerTextStyle);
+
+            // Vertical divider
+            DrawDivider(new Rect(wx + 118, wy + 11, 1, 12), new Color(0.153f, 0.153f, 0.165f, 1f));
+
+            // Relay Label
+            string relayLabel = online ? "Relay Steam P2P · 28 ms" : "Kein Relay";
+            GUI.Label(new Rect(wx + 128, wy + 9, 150, 16), relayLabel, _subtitleStyle);
+
+            // Mini Progress Bar (2px height)
+            float barX = wx + 280;
+            float barW = ww - 380;
+            float barY = wy + 16;
+            DrawBox(new Rect(barX, barY, barW, 2), _texBorder, new Color(0.153f, 0.153f, 0.165f, 1f));
+            float fillW = _syncing ? barW * 0.5f : (online ? barW : 0f);
+            if (fillW > 0)
+            {
+                GUI.DrawTexture(new Rect(barX, barY, fillW, 2), _texTerracotta);
+            }
+
+            // Sync stamp
+            float secondsAgo = _lastSyncTime > 0 ? (Time.unscaledTime - _lastSyncTime) : 4f;
+            string stamp = _syncing ? "…" : $"Sync {Mathf.Max(1, (int)secondsAgo)}s";
+            GUI.Label(new Rect(wx + ww - 95, wy + 9, 85, 16), stamp, _hotkeyStyle);
+        }
+
+        // ==================== COMPONENT HELPERS ====================
+        private static bool DrawButton(Rect rect, string label, GUIStyle style)
+        {
+            Vector2 mp = Event.current != null ? Event.current.mousePosition : new Vector2(-1, -1);
+            bool hover = rect.Contains(mp);
+
+            Texture2D bgTex = _texCardBg;
+            Color borderColor = new Color(0.247f, 0.247f, 0.275f, 1f);
+
+            if (style == _btnTerracottaStyle)
+            {
+                bgTex = hover ? _texTerracottaHover : _texTerracotta;
+                borderColor = new Color(0.851f, 0.467f, 0.341f, 0.9f);
+            }
+            else if (style == _btnOutlineStyle)
+            {
+                bgTex = hover ? _texButtonDarkHover : _texCardBg;
+                borderColor = hover ? new Color(0.851f, 0.467f, 0.341f, 0.8f) : new Color(0.247f, 0.247f, 0.275f, 1f);
+            }
+            else if (style == _btnDarkStyle)
+            {
+                bgTex = hover ? _texButtonDarkHover : _texButtonDark;
+                borderColor = new Color(0.153f, 0.153f, 0.165f, 1f);
+            }
+
+            DrawBox(rect, bgTex, borderColor);
+
+            var oldColor = GUI.color;
+            if (hover && style != _btnTerracottaStyle) GUI.color = new Color(1.15f, 1.15f, 1.15f, 1f);
+            GUI.Label(rect, label, style);
+            GUI.color = oldColor;
+
+            if (hover && Input.GetMouseButtonUp(0))
+                return true;
+
+            return false;
+        }
+
+        private static bool DrawToggle(Rect rect, bool value, string label)
+        {
+            float toggleW = 48;
+            var style = value ? _btnTerracottaStyle : _btnDarkStyle;
+            string stateText = value ? "AN" : "AUS";
+
+            if (DrawButton(new Rect(rect.x, rect.y, toggleW, rect.height), stateText, style))
+            {
+                value = !value;
+                AudioFeedback.PlayClick();
+            }
+
+            GUI.Label(new Rect(rect.x + toggleW + 10, rect.y + 2, rect.width - toggleW - 10, rect.height), label, _memberNameStyle);
+            return value;
+        }
+
+        private static void DrawBox(Rect rect, Texture2D bgTex, Color borderColor)
+        {
+            if (bgTex != null)
+                GUI.DrawTexture(rect, bgTex);
+
+            var oldColor = GUI.color;
+            GUI.color = borderColor;
+
+            // 1px Border
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y + rect.height - 1, rect.width, 1), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, 1, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x + rect.width - 1, rect.y, 1, rect.height), Texture2D.whiteTexture);
+
+            GUI.color = oldColor;
+        }
+
+        private static void DrawDivider(Rect rect, Color color)
+        {
             var oldColor = GUI.color;
             GUI.color = color;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
 
+        private static string FormatLobbyCode(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            if (raw.Length == 12 && !raw.Contains("-"))
+            {
+                return $"{raw.Substring(0, 4)}-{raw.Substring(4, 4)}-{raw.Substring(8, 4)}";
+            }
+            return raw;
+        }
+
+        private static string GetInitials(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "OP";
+            string[] parts = name.Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return $"{char.ToUpper(parts[0][0])}{char.ToUpper(parts[1][0])}";
+            }
+            return name.Length >= 2 ? name.Substring(0, 2).ToUpper() : name.ToUpper();
+        }
+
         private static bool CheckToggleKey()
         {
             try
             {
-                if (Enum.TryParse<KeyCode>(Config.ToggleKey, true, out var key) && Input.GetKeyDown(key))
+                if (Input.GetKeyDown(KeyCode.F8)) return true;
+                if (!string.IsNullOrEmpty(Config.ToggleKey) && Enum.TryParse<KeyCode>(Config.ToggleKey, true, out var key))
                 {
-                    return true;
+                    if (Input.GetKeyDown(key)) return true;
                 }
             }
             catch { }
-
             return false;
         }
 
+        // ==================== STYLES & PALETTE INITIALIZER ====================
         private static void EnsureStyles()
         {
-            if (_stylesInitialized && _texBg != null)
-                return;
+            if (_stylesInitialized && _texMasterBg != null) return;
 
-            _texBg = MakeColorTexture(new Color(0.08f, 0.07f, 0.05f, 0.96f));
-            _texHeader = MakeColorTexture(new Color(0.18f, 0.15f, 0.10f, 1.0f));
-            _texButton = MakeColorTexture(new Color(0.16f, 0.14f, 0.11f, 1.0f));
-            _texButtonActive = MakeColorTexture(new Color(0.40f, 0.32f, 0.18f, 1.0f));
-            _texProgressBarBg = MakeColorTexture(new Color(0.12f, 0.10f, 0.08f, 1.0f));
-            _texProgressBarFill = MakeColorTexture(new Color(0.769f, 0.639f, 0.353f, 1.0f));
+            // Template Color Tokens
+            var colorMasterBg = new Color(0.094f, 0.094f, 0.106f, 0.98f);     // #18181B Master Surface
+            var colorCardBg = new Color(0.122f, 0.118f, 0.114f, 1.0f);       // #1F1E1D Card Surface
+            var colorCardDashed = new Color(0.110f, 0.110f, 0.122f, 1.0f);   // #1C1C1F Empty/Dashed Card
+            var colorFooterBg = new Color(0.078f, 0.078f, 0.086f, 1.0f);     // #141416 Footer Surface
+            var colorTerracotta = new Color(0.851f, 0.467f, 0.341f, 1.0f);   // #D97757 Terracotta Accent
+            var colorTerracottaHover = new Color(0.800f, 0.471f, 0.361f, 1f); // #CC785C Hover Accent
+            var colorBadgeBg = new Color(0.153f, 0.153f, 0.165f, 1.0f);      // #27272A Badge Pill
+            var colorButtonDark = new Color(0.13f, 0.13f, 0.14f, 1.0f);
+            var colorButtonDarkHover = new Color(0.18f, 0.18f, 0.20f, 1.0f);
+            var colorBorder = new Color(0.153f, 0.153f, 0.165f, 1.0f);       // #27272A Border
+            var colorDotGreen = new Color(0.063f, 0.725f, 0.506f, 1.0f);     // #10B981 Green Dot
+            var colorDotGrey = new Color(0.322f, 0.322f, 0.357f, 1.0f);      // #52525B Grey Dot
 
-            var gold = new Color(0.769f, 0.639f, 0.353f, 1f);
-            var text = new Color(0.88f, 0.84f, 0.72f, 1f);
-            var muted = new Color(0.60f, 0.54f, 0.42f, 1f);
-            var green = new Color(0.45f, 0.85f, 0.50f, 1f);
-            var red = new Color(0.92f, 0.35f, 0.30f, 1f);
+            var paperWhite = new Color(0.980f, 0.976f, 0.961f, 1.0f);       // #FAF9F5
+            var textSecondary = new Color(0.831f, 0.831f, 0.847f, 1.0f);    // #D4D4D8
+            var textMuted = new Color(0.443f, 0.443f, 0.478f, 1.0f);        // #71717A
+            var textSubtle = new Color(0.322f, 0.322f, 0.357f, 1.0f);       // #52525B
+            var darkButtonText = new Color(0.122f, 0.118f, 0.114f, 1.0f);   // #1F1E1D
 
-            _headerStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 13,
-                fontStyle = FontStyle.Bold
-            };
-            _headerStyle.normal.textColor = gold;
+            _texMasterBg = MakeColorTexture(colorMasterBg);
+            _texCardBg = MakeColorTexture(colorCardBg);
+            _texCardDashed = MakeColorTexture(colorCardDashed);
+            _texFooterBg = MakeColorTexture(colorFooterBg);
+            _texTerracotta = MakeColorTexture(colorTerracotta);
+            _texTerracottaHover = MakeColorTexture(colorTerracottaHover);
+            _texBadgeBg = MakeColorTexture(colorBadgeBg);
+            _texButtonDark = MakeColorTexture(colorButtonDark);
+            _texButtonDarkHover = MakeColorTexture(colorButtonDarkHover);
+            _texBorder = MakeColorTexture(colorBorder);
+            _texDotGreen = MakeColorTexture(colorDotGreen);
+            _texDotGrey = MakeColorTexture(colorDotGrey);
 
-            _textStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                wordWrap = true
-            };
-            _textStyle.normal.textColor = text;
+            _titleStyle = new GUIStyle { fontSize = 13, alignment = TextAnchor.MiddleLeft };
+            _titleStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
 
-            _highlightStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold
-            };
-            _highlightStyle.normal.textColor = green;
+            _subtitleStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
+            _subtitleStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
 
-            _mutedStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 11,
-                fontStyle = FontStyle.Italic
-            };
-            _mutedStyle.normal.textColor = muted;
+            _sectionHeaderStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
+            _sectionHeaderStyle.m_Normal = new GUIStyleState { textColor = textMuted };
 
-            _dangerStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold
-            };
-            _dangerStyle.normal.textColor = red;
+            _lobbyCodeStyle = new GUIStyle { fontSize = 15, alignment = TextAnchor.MiddleLeft };
+            _lobbyCodeStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
 
-            _boxStyle = new GUIStyle(GUI.skin.box);
-            _boxStyle.normal.background = _texHeader;
-            _boxStyle.padding = new RectOffset(8, 8, 8, 8);
+            _lobbySubtextStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleLeft };
+            _lobbySubtextStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
 
-            _tabButtonStyle = new GUIStyle(GUI.skin.button);
-            _tabButtonStyle.normal.background = _texButton;
-            _tabButtonStyle.normal.textColor = text;
-            _tabButtonStyle.fontStyle = FontStyle.Bold;
-            _tabButtonStyle.fontSize = 11;
+            _memberNameStyle = new GUIStyle { fontSize = 13, alignment = TextAnchor.MiddleLeft };
+            _memberNameStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
 
-            _activeTabButtonStyle = new GUIStyle(GUI.skin.button);
-            _activeTabButtonStyle.normal.background = _texButtonActive;
-            _activeTabButtonStyle.normal.textColor = gold;
-            _activeTabButtonStyle.fontStyle = FontStyle.Bold;
-            _activeTabButtonStyle.fontSize = 11;
+            _memberRoleStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
+            _memberRoleStyle.m_Normal = new GUIStyleState { textColor = colorTerracotta };
 
-            _actionButtonStyle = new GUIStyle(GUI.skin.button);
-            _actionButtonStyle.normal.background = _texButton;
-            _actionButtonStyle.normal.textColor = text;
-            _actionButtonStyle.fontSize = 11;
+            _badgeInitialStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _badgeInitialStyle.m_Normal = new GUIStyleState { textColor = new Color(0.631f, 0.631f, 0.667f, 1f) };
+
+            _emptySlotStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _emptySlotStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
+
+            _statusPillStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleLeft };
+            _statusPillStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
+
+            _btnTerracottaStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _btnTerracottaStyle.m_Normal = new GUIStyleState { textColor = darkButtonText };
+
+            _btnOutlineStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _btnOutlineStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
+
+            _btnDarkStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _btnDarkStyle.m_Normal = new GUIStyleState { textColor = textMuted };
+
+            _footerTextStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
+            _footerTextStyle.m_Normal = new GUIStyleState { textColor = new Color(0.631f, 0.631f, 0.667f, 1f) };
+
+            _hotkeyStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleRight };
+            _hotkeyStyle.m_Normal = new GUIStyleState { textColor = new Color(0.247f, 0.247f, 0.275f, 1f) };
+
+            _notificationStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
+            _notificationStyle.m_Normal = new GUIStyleState { textColor = darkButtonText };
 
             _stylesInitialized = true;
         }

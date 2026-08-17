@@ -3,29 +3,40 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
     <AssemblyName>IronXNestCommand</AssemblyName>
     <RootNamespace>IronXNestCommand</RootNamespace>
   </PropertyGroup>
 
-  <!-- Verweise auf die MelonLoader- und Spiel-Assemblies -->
+  <PropertyGroup>
+    <GameFolder Condition="'$(GameFolder)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator</GameFolder>
+  </PropertyGroup>
+
   <ItemGroup>
-    <!-- Passe die Pfade zu deiner Iron Nest Installation an -->
-    <Reference Include="MelonLoader">
-      <HintPath>$(GameFolder)\MelonLoader\net6\MelonLoader.dll</HintPath>
+    <ProjectReference Include="..\IronXNestCommand.Core\IronXNestCommand.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LavaGang.MelonLoader" Version="0.7.3" IncludeAssets="compile" />
+  </ItemGroup>
+
+  <!-- Verweise auf die Spiel-Assemblies (IL2CPP Interop) -->
+  <ItemGroup>
+    <Reference Include="$(GameFolder)\MelonLoader\net6\0Harmony.dll" Condition="Exists('$(GameFolder)\MelonLoader\net6\0Harmony.dll')">
       <Private>false</Private>
     </Reference>
-    <Reference Include="0Harmony">
-      <HintPath>$(GameFolder)\MelonLoader\net6\0Harmony.dll</HintPath>
+    <Reference Include="$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll" Condition="Exists('$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll')">
       <Private>false</Private>
     </Reference>
-    <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>$(GameFolder)\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
+    <Reference Include="$(GameFolder)\MelonLoader\Il2CppAssemblies\*.dll" Condition="Exists('$(GameFolder)\MelonLoader\Il2CppAssemblies')">
       <Private>false</Private>
     </Reference>
-    <!-- Optionale Steamworks.NET Referenz für direkte API-Aufrufe -->
-    <Reference Include="Steamworks.NET" Condition="Exists('$(GameFolder)\Iron Nest_Data\Managed\Steamworks.NET.dll')">
-      <HintPath>$(GameFolder)\Iron Nest_Data\Managed\Steamworks.NET.dll</HintPath>
+    
+    <!-- Fallback auf BepInEx Interop falls vorhanden -->
+    <Reference Include="$(GameFolder)\BepInEx\interop\*.dll" Condition="Exists('$(GameFolder)\BepInEx\interop')">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll" Condition="Exists('$(GameFolder)\BepInEx\core\Il2CppInterop.Runtime.dll')">
       <Private>false</Private>
     </Reference>
   </ItemGroup>

@@ -1,94 +1,43 @@
 @echo off
-setlocal enabledelayedexpansion
-title IronXNestCommand - Auto Build & Deploy
+title IronXNestCommand - MelonLoader ^& BepInEx Build ^& Deploy
 
-echo ========================================================
-echo         IRON X NEST COMMAND - BUILD & DEPLOY
-echo ========================================================
+echo ==============================================================================
+echo   IRON X NEST COMMAND - DUAL LOADER BUILD ^& DEPLOY
+echo   (Non-Standalone / MelonLoader in Mods/ ^& BepInEx in BepInEx/plugins/)
+echo ==============================================================================
 echo.
 
-set "GAME_DIR=C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator"
-set "MODS_DIR=%GAME_DIR%\Mods"
-set "PROJECT_FILE=%~dp0IronXNestCommand.MelonLoader\IronXNestCommand.csproj"
-set "OUTPUT_DLL=%~dp0IronXNestCommand.MelonLoader\bin\Release\net6.0\IronXNestCommand.dll"
+set GAME_DIR=C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator
+set MODS_DIR=C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator\Mods
+set PLUGINS_DIR=C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator\BepInEx\plugins
 
-:: 1. Check if Game directory exists
-if not exist "%GAME_DIR%" (
-    echo [FEHLER] Spielverzeichnis nicht gefunden unter:
-    echo "%GAME_DIR%"
-    echo Bitte passe den Pfad in dieser Batch-Datei an.
-    goto :error
-)
+set SOLUTION_PATH=%~dp0IronXNestCommand.sln
+set MELON_DLL=%~dp0IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll
+set BEPINEX_DLL=%~dp0IronXNestCommand.Host.BepInEx\bin\Release\IronXNestCommand.dll
+set CORE_DLL=%~dp0IronXNestCommand.Core\bin\Release\IronXNestCommand.Core.dll
 
-:: Ensure Mods folder exists
-if not exist "%MODS_DIR%" (
-    mkdir "%MODS_DIR%"
-)
+:: 1. Build Solution (MelonLoader + BepInEx + Core)
+echo [1/2] Kompiliere alle Projekte in IronXNestCommand.sln (Release)...
+dotnet build "%SOLUTION_PATH%" -c Release
 
-:: 2. Locate dotnet.exe
-set "DOTNET_CMD="
-where dotnet >nul 2>nul
-if %errorlevel% equ 0 (
-    set "DOTNET_CMD=dotnet"
-) else if exist "C:\Program Files\dotnet\dotnet.exe" (
-    set "DOTNET_CMD=C:\Program Files\dotnet\dotnet.exe"
-) else if exist "%LOCALAPPDATA%\dotnet\dotnet.exe" (
-    set "DOTNET_CMD=%LOCALAPPDATA%\dotnet\dotnet.exe"
-)
+if errorlevel 1 goto :BuildError
 
-if "%DOTNET_CMD%"=="" (
-    echo [FEHLER] .NET 6 SDK wurde nicht gefunden!
-    echo.
-    echo Bitte lade das kostenlose .NET 6 SDK von Microsoft herunter:
-    echo https://dotnet.microsoft.com/download/dotnet/6.0
-    echo.
-    goto :error
-)
-
-echo [INFO] Nutze dotnet: %DOTNET_CMD%
-echo [INFO] Kompiliere IronXNestCommand (Release)...
+:: 2. Deploy to both Mods/ (MelonLoader) and BepInEx/plugins/ (BepInEx)
 echo.
+echo [2/2] Kopiere Mod-DLLs in Spielverzeichnisse...
 
-"%DOTNET_CMD%" build "%PROJECT_FILE%" -c Release -p:GameFolder="%GAME_DIR%"
-
-if %errorlevel% neq 0 (
-    echo.
-    echo [FEHLER] Kompilierung fehlgeschlagen!
-    goto :error
-)
+powershell -NoProfile -Command "New-Item -ItemType Directory -Path '%MODS_DIR%' -Force | Out-Null; Copy-Item '%MELON_DLL%' '%MODS_DIR%\IronXNestCommand.dll' -Force; Write-Host '  [+] MelonLoader: %MODS_DIR%\IronXNestCommand.dll'; New-Item -ItemType Directory -Path '%PLUGINS_DIR%' -Force | Out-Null; Copy-Item '%BEPINEX_DLL%' '%PLUGINS_DIR%\IronXNestCommand.dll' -Force; Copy-Item '%CORE_DLL%' '%PLUGINS_DIR%\IronXNestCommand.Core.dll' -Force; Write-Host '  [+] BepInEx:     %PLUGINS_DIR%\IronXNestCommand.dll'"
 
 echo.
-echo [INFO] Kopiere DLL in den Mods-Ordner...
-
-if exist "%OUTPUT_DLL%" (
-    copy /Y "%OUTPUT_DLL%" "%MODS_DIR%\IronXNestCommand.dll" >nul
-) else (
-    :: Fallback search if path differs
-    if exist "%~dp0IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll" (
-        copy /Y "%~dp0IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll" "%MODS_DIR%\IronXNestCommand.dll" >nul
-    ) else (
-        echo [FEHLER] Konnte die erstellte IronXNestCommand.dll nicht finden!
-        goto :error
-    )
-)
-
-echo.
-echo ========================================================
-echo   [ERFOLG] Die Mod wurde erfolgreich gebaut und installiert!
-echo   Ziel: %MODS_DIR%\IronXNestCommand.dll
-echo ========================================================
-echo.
-echo Du kannst das Spiel jetzt einfach ueber Steam starten!
-echo Druecke im Spiel [F8] fuer das Overlay.
+echo ==============================================================================
+echo   [ERFOLG] IronXNestCommand fuer MelonLoader UND BepInEx installiert!
+echo ==============================================================================
 echo.
 pause
 exit /b 0
 
-:error
+:BuildError
 echo.
-echo ========================================================
-echo   Der Vorgang wurde mit Fehlern abgebrochen.
-echo ========================================================
-echo.
+echo [FEHLER] Build fehlgeschlagen!
 pause
 exit /b 1

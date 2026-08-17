@@ -10,6 +10,11 @@ namespace IronXNestCommand.Patches
     /// </summary>
     public static class AmmoInjectionPatch
     {
+        public static void InitializePatches(HarmonyLib.Harmony harmony)
+        {
+            // Ammo injection hooks
+        }
+
         // TODO: Ersetze 'ItemDatabase' durch den echten Klassennamen des Spiels, der Items/Munition lädt.
         // [HarmonyPatch(typeof(ItemDatabase), "Initialize")] 
         public static class ItemDatabase_Initialize_Patch

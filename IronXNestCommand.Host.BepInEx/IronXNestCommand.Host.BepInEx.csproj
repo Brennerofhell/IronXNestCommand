@@ -4,6 +4,7 @@
     <AssemblyName>IronXNestCommand</AssemblyName>
     <Description>BepInEx 6 IL2CPP host for IronXNestCommand.</Description>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <Nullable>disable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -53,6 +54,14 @@
     </Reference>
     <Reference Include="Unity.InputSystem">
       <HintPath>$(BepInExInterop)\Unity.InputSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(BepInExInterop)\UnityEngine.AudioModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(BepInExInterop)\Il2Cppmscorlib.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
