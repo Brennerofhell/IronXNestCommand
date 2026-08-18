@@ -449,6 +449,48 @@ Das per Soft-Dependency erkannte Basis-Plugin `IronNestCoop.Core.dll` zeichnet �
 
 ---
 
+### 3.27 🛑 MelonLoader-Drop aus der Release-Pipeline & zwei build-brechende Bugs behoben
+
+#### Ausgangslage
+Projektentscheidung (2026-08-19): Ab sofort wird nur noch BepInEx 6 IL2CPP released, MelonLoader nicht mehr. `IronXNestCommand.MelonLoader/` bleibt als Quellcode im Repo/`.sln` (weiterhin per `tools/Deploy-Melon.ps1` lokal baubar), wird aber von `Package-Release.ps1`, `Build-Standalone-Exe.ps1` und `Installer.iss` nicht mehr gebaut/gebündelt. Der Standalone-Installer zeigt die MelonLoader-Checkbox weiterhin an, aber deaktiviert (`Enabled = false`, `Checked = false`) statt sie zu entfernen — vermeidet toten Code in `BtnInstall_Click`, der sonst beim (unmöglichen) Ankreuzen eine nicht mehr eingebettete `MelonLoaderRuntime.zip`-Ressource anfordern würde.
+
+#### Problem-Analyse (Root Cause)
+Der zuletzt gepushte Stand (nach den Antigravity-Commits bis `675961f`) **kompilierte nicht** — zwei echte Fehler in `IronXNestCommand.Host.BepInEx/Steam/SteamworksDetector.cs`:
+1. **`CS0656` (fehlendes `NullableAttribute`-Konstrukt)**: Eine inline-Lambda wurde direkt an `AppDomain.CurrentDomain.AssemblyResolve` (Delegat-Typ `ResolveEventHandler`, dessen Parameter/Rückgabewert in modernen Referenz-Assemblies nullable-annotiert sind) gebunden. Der Compiler musste dafür ein `NullableAttribute` emittieren, das in der für dieses IL2CPP-Projekt referenzierten Assembly-Menge nicht auffindbar war — unabhängig vom projektweiten `<Nullable>disable</Nullable>`.
+2. **`CS0120`**: `Plugin.Log?.LogInfo(...)`/`Plugin.Log?.LogWarning(...)` wurden aufgerufen, als wäre `Log` ein statisches Member — `BasePlugin.Log` ist aber eine Instanzeigenschaft. In einer statischen Methode (`TryCreateLobby`) ohne Plugin-Instanz nicht aufrufbar.
+
+#### Die Lösung
+1. Die Lambda wurde durch eine benannte statische Methode (`ResolveMissingAssembly`) ersetzt und per Methodengruppen-Konvertierung (`+= ResolveMissingAssembly;`) gebunden — umgeht die Emissionsanforderung vollständig.
+2. Die beiden `Plugin.Log?.…`-Aufrufe wurden durch den in dieser Datei bereits durchgängig verwendeten statischen `ModLogger.Info(...)`/`ModLogger.Warn(...)` ersetzt.
+3. Verifiziert: `dotnet build IronXNestCommand.sln -c Release` → 0 Fehler; `Package-Release.ps1`, `Build-Standalone-Exe.ps1` und `ISCC.exe tools/Installer.iss` laufen alle drei fehlerfrei durch (Standalone-exe ohne MelonLoader-Runtime: 52 MB → 33 MB).
+
+**Lehre**: Nach jeder Übernahme von Änderungen aus einer parallelen Session/einem anderen Tool zuerst `dotnet build` laufen lassen, bevor man weiterarbeitet oder released — ein grüner `git log` sagt nichts darüber aus, ob der zuletzt gepushte Stand tatsächlich kompiliert.
+
+---
+
+### 3.28 🎯 Live-Test auf echter Installation: Overlay funktioniert, aber Lobby-Erstellung hängt (Root Cause: falsches Ziel-Plugin)
+
+#### Testaufbau
+BepInEx-Build frisch deployed auf die reale Spielinstallation (`C:\Program Files (x86)\Steam\steamapps\common\Iron Nest Heavy Turret Simulator`, dort bereits BepInEx 6 + **`OpenNestCoop.dll`** installiert — nicht `IronNestCoop.Core.dll`), Spiel gestartet, `[F8]` gedrückt, Screenshot geprüft, „+ Lobby erstellen" geklickt, Log ausgewertet.
+
+#### Ergebnis: Overlay & Ladevorgang einwandfrei
+- `BepInEx/LogOutput.log`: **0 Treffer** für „error"/„exception" über den gesamten Log — die vormals bei jedem GUI-Frame geworfene `GUI.SetNextControlName`-`MissingMethodException` (§3.26) tritt nicht mehr auf.
+- Plugin lädt vollständig durch bis `„[IronXNestCommand] Erfolgreich geladen!"`, korrekte Versionsanzeige `0.1.5`.
+- `[F8]`-Overlay öffnet sich, rendert sauber ohne `□`-Platzhalter-Kästchen (§3.26-Fix live bestätigt) — Home/Lobby- und Einstellungen-Tab, Besatzungsliste, Re-Sync-Button, alles wie im Design vorgesehen.
+- Status zeigt „Steamworks bereit" statt „Stub" — der generische Steamworks.NET-Fallback (`IsSteamAvailable` ohne IronNestCoop-Erkennung) griff, weil `OpenNestCoop.dll` selbst einen „Steamworks.NET managed context manually initialized" im Prozess bereitstellt, den unser generischer Typ-Scan zufällig mitfindet.
+
+#### Root Cause bestätigt: `SteamworksDetector` und die Panel-Unterdrückung (§3.20) zielen auf das falsche Plugin
+Auf dieser (und vermutlich vielen anderen) Installationen läuft **`OpenNestCoop.dll`** (Namespace `OpenNestCoop.*`, z. B. `OpenNestCoop.UI.CoopUIManager`, `OpenNestCoop.Net.NetManager`) als tatsächliche Co-op-Basis-Mod — **nicht** `IronNestCoop.Core.dll` (Namespace `IronNestCoop.Core.*`), auf das der gesamte Reflection-Code in `SteamworksDetector.cs` (`IronNestCoop.Core.Net.SteamNet`) und die Panel-Unterdrückung aus §3.20 (`IronNestCoop.Core.CoopRunner`) fest verdrahtet sind. Konsequenzen, live beobachtet:
+1. **Eigenes Overlay UND Open-Nest-Co-op-Panel gleichzeitig sichtbar** — die Suppression aus §3.20 findet ihre Zielklasse nicht, weil sie nach `IronNestCoop.Core.CoopRunner` sucht statt nach `OpenNestCoop.UI.CoopUIManager`. Zwei konkurrierende Lobby-UIs überlagern sich auf dem Bildschirm.
+2. **„+ Lobby erstellen" hängt endlos**: Log zeigt `[SteamworksDetector] SteamMatchmaking.CreateLobby für 4 Spieler aufgerufen.` — der native reflektierte Aufruf feuert ohne Exception, aber die UI bleibt auf „Erstelle neue Co-op Lobby..." stehen (0/4 Crew, keine Lobby-ID erscheint). Hypothese: `Steamworks.SteamMatchmaking.CreateLobby` ist asynchron und braucht einen laufenden `SteamAPI.RunCallbacks()`-Callback-Pump, um das `LobbyCreated_t`-Callback auszulösen — dieser Pump gehört vermutlich zu Open Nest Co-ops eigenem, bereits initialisiertem Steamworks-Kontext und liefert das Ergebnis nie an unseren `SteamworksDetector` zurück. **Das ist der direkte, im Live-Test verifizierte Grund für „kann keine Lobby erstellen".**
+
+#### Für später (nicht in dieser Session umgesetzt)
+- Reflection-Ziele in `SteamworksDetector.cs`/der Panel-Suppression um `OpenNestCoop.*`-Typnamen erweitern (analog zum bestehenden `IronNestCoop.Core.*`-Pfad) — oder direkt auf einen sauber lizenzierten Fork von [`OPEN_NEST_CO-OP`](https://github.com/1499501762/OPEN_NEST_CO-OP) (AGPL-3.0) umstellen, siehe die Lizenz-Abwägung in `THIRD-PARTY-LICENSES.md`.
+- Prüfen, ob ein eigener `SteamAPI.RunCallbacks()`-Pump (z. B. in `MultiplayerPatches`/einem `Update`-Hook) nötig ist, damit unsere eigene `CreateLobby`-Anfrage tatsächlich eine Antwort bekommt, statt auf einen fremden Callback-Kontext zu hoffen.
+- Test-Deployment nach diesem Durchlauf wieder rückgängig gemacht: `IronXNestCommand.dll`/`IronXNestCommand.Core.dll` aus `BepInEx/plugins/` sowie `UserData/IronXNestCommand/` auf der Testinstallation entfernt.
+
+---
+
 ## 5. Build- & Deployment-Anleitung
 
 ### 5.1 Dual-Loader Deployment (1-Klick)
