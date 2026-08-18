@@ -33,6 +33,15 @@ if ($LASTEXITCODE -ne 0) {
     throw "Build failed with exit code $LASTEXITCODE"
 }
 
+# BepInEx Runtime sicherstellen
+$bepVendor = Join-Path $root 'tools\vendor\BepInEx-extracted'
+if (Test-Path $bepVendor) {
+    if (-not (Test-Path (Join-Path $game 'winhttp.dll'))) {
+        Copy-Item "$bepVendor\*" $game -Recurse -Force
+        Write-Host "[DEPLOY] Installed BepInEx 6 IL2CPP Runtime to $game" -ForegroundColor Green
+    }
+}
+
 if (-not (Test-Path $plugins)) {
     New-Item -ItemType Directory -Path $plugins -Force | Out-Null
 }

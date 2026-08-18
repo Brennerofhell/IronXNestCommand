@@ -6,7 +6,7 @@ using IronXNestCommand.Progression;
 using IronXNestCommand.Steam;
 using IronXNestCommand.UI;
 
-[assembly: MelonInfo(typeof(IronXNestCommand.Main), "IronXNestCommand", "0.1.4", "Brennerofhell")]
+[assembly: MelonInfo(typeof(IronXNestCommand.Main), "IronXNestCommand", "0.1.5", "Brennerofhell")]
 [assembly: MelonGame(null, null)] // Gilt für Iron Nest
 
 namespace IronXNestCommand

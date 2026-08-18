@@ -1,6 +1,6 @@
 # ✦ IronXNestCommand // Co-op Lobby, Feind-Schutz & Lochkarten-Sync ✦
 
-[![Installer (.exe)](https://img.shields.io/badge/Installer-.exe-D97757?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.4/IronXNestCommand_Setup_v0.1.4.exe)
+[![Installer (.exe)](https://img.shields.io/badge/Installer-.exe-D97757?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.5/IronXNestCommand_Setup_v0.1.5.exe)
 [![Version & Downloads](https://img.shields.io/github/v/release/Brennerofhell/IronXNestCommand?style=for-the-badge&label=Release&logo=github&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)
 [![Alle Downloads](https://img.shields.io/github/downloads/Brennerofhell/IronXNestCommand/total?style=for-the-badge&label=Downloads&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases)
 
@@ -9,7 +9,7 @@
 [![Design](https://img.shields.io/badge/Design_System-Anthropic_Dieselpunk-E07A5F?style=for-the-badge)](https://anthropic.com)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
 
-> **[⬇ Installer .exe herunterladen](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.4/IronXNestCommand_Setup_v0.1.4.exe)** — Doppelklick, Assistent führt durch die Installation. Alternativ ZIP oder Standalone-exe auf der [Releases-Seite](https://github.com/Brennerofhell/IronXNestCommand/releases/latest). Kein Kompilieren nötig.
+> **[⬇ Installer .exe herunterladen](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.5/IronXNestCommand_Setup_v0.1.5.exe)** — Doppelklick, Assistent führt durch die Installation. Alternativ ZIP oder Standalone-exe auf der [Releases-Seite](https://github.com/Brennerofhell/IronXNestCommand/releases/latest). Kein Kompilieren nötig.
 
 **IronXNestCommand** ist eine elegante, hochperformante **Co-op Multiplayer- & Besatzungs-Suite** für *Iron Nest: Heavy Turret Simulator*. Die Modifikation unterstützt **MelonLoader** (`Mods/`) sowie **BepInEx 6 IL2CPP** (`BepInEx/plugins/`) als saubere **Non-Standalone Mod** und integriert sich nahtlos in die offizielle Co-op Mod `IronNestCoop.Core.dll`.
 

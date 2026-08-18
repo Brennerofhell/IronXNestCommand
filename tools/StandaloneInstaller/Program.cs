@@ -41,7 +41,7 @@ namespace IronXNestCommand.Installer
         public static readonly Color cBorderLight = Color.FromArgb(82, 82, 91); // #52525B
 
         public const string GameExeName = "Iron Nest Heavy Turret Simulator.exe";
-        public const string ModVersion = "0.1.4";
+        public const string ModVersion = "0.1.5";
 
         // Navigation
         private Panel pnlHeader;

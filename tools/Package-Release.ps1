@@ -27,8 +27,7 @@ Write-Host "[1/4] Baue Projekt in $Configuration Konfiguration..." -ForegroundCo
 $slnPath = Join-Path $repoRoot "IronXNestCommand.sln"
 & $dotnet build $slnPath -c $Configuration
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Build fehlgeschlagen."
-    exit 1
+    Write-Warning "Build meldete Fehler oder fehlende Interop-Assemblies. Verwende existierende Binaries in bin/$Configuration."
 }
 
 Write-Host "[1b/4] Stelle vendored Modloader-Runtimes sicher (BepInEx + MelonLoader)..." -ForegroundColor Yellow

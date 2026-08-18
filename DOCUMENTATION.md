@@ -415,6 +415,35 @@ Das per Soft-Dependency erkannte Basis-Plugin `IronNestCoop.Core.dll` zeichnet �
 
 ---
 
+### 3.26 🚀 Version 0.1.5: Steamworks-Erkennung, IL2CPP-Assembly-Lader & Schriftart-Glyphen-Fix
+
+#### Problem-Analyse 1 (Steamworks & IronNestCoop nicht erkannt im MelonLoader)
+1. **Unvollständige AppDomain-Registrierung:** Unter MelonLoader IL2CPP werden assemblies wie `Il2Cppcom.rlabrecque.steamworks.net.dll` und `IronNestCoop.Core.dll` nicht standardmäßig im .NET-AppDomain geladen, wenn sie nicht explizit referenziert oder geladen werden.
+2. **Fehlender Festplatten-Suchpfad:** `SteamworksDetector.ResolveTypes()` suchte nur in bereits geladenen Assemblies (`AppDomain.CurrentDomain.GetAssemblies()`). Lag `IronNestCoop.Core.dll` in `Mods/`, `UserLibs/` oder `BepInEx/plugins/`, wurde sie nicht automatisch aktiviert, was zum Fallback-Status `Status: Steam nicht verfügbar (Offline / Stub)` führte.
+
+#### Problem-Analyse 2 (Quadratische Platzhalter-Kästchen `□` im Menü)
+1. **Fehlende Emoji-Glyphen in Unity IMGUI:** Unitys Standard-Bitmap-Schriftart unter Windows (`GUIStyle`) unterstützt keine komplexen Unicode-Emojis wie `🏠`, `➕`, `📥`, `👑`, `🎯`, `🔄`, `📋`, `✔`, `✕`, `🛡️`, `💾`. Auf Windows-Systemen wurden diese Symbole auf allen Buttons, Tabs und Member-Karten als störende Rechtecke/Kästchen `□` dargestellt.
+
+#### Problem-Analyse 3 (IL2CPP Span-Method-Missing Exception)
+1. In `CommandOverlay.cs` rief `GUI.SetNextControlName("LobbyJoinInput")` intern eine IL2CPP-spezifische `ReadOnlySpan.GetPinnableReference()` auf, die auf bestimmten Unity IL2CPP Runtimes einen `MissingMethodException`-Absturz während `OnGUI()` auslöste.
+
+---
+
+#### Die Lösungen in v0.1.5
+1. **Dynamischer Festplatten-Assembly-Scanner (`SteamworksDetector.cs`):**
+   - `ResolveTypes()` durchsucht nun aktiv alle bekannten Spielordner (`BepInEx/plugins/`, `Mods/`, `UserLibs/`, `Plugins/`, Root) und lädt `IronNestCoop.Core.dll` via `Assembly.LoadFrom()` dynamisch zur Laufzeit nach.
+   - IL2CPP-spezifische Steamworks-Assemblies (`Il2Cppcom.rlabrecque.steamworks.net`, `Il2CppHeathen.Steamworks`) werden automatisch per `Assembly.Load()` in die Typenauflösung einbezogen.
+2. **Bereinigung der Benutzeroberfläche auf Standard-Typografie (`CommandOverlay.cs`):**
+   - Sämtliche problematischen Emojis wurden durch kristallklare, standardkonforme Textlabels und Symbole ersetzt (`+ Lobby erstellen`, `> Lobby Beitreten`, `Kommandant (Lokal)`, `Besatzung re-syncen`, `Kopiert!`, `[X]`, etc.).
+   - Sämtliche `□`-Platzhalter auf Buttons, Tabs, Dialogen und Notifikationen sind damit restlos beseitigt.
+3. **Beseitigung der IL2CPP-Inkompatibilität:**
+   - `GUI.SetNextControlName` wurde restlos entfernt; Textfelder werden über native IMGUI-Event-Handler (`Event.current.keyCode == KeyCode.Return`) gesteuert.
+4. **Dual-Loader Synchronisation (BepInEx 6 & MelonLoader):**
+   - `IronNestCoop.Core.dll` wird nun bei beiden Ladesystemen (`Mods/`, `UserLibs/`, `BepInEx/plugins/`) bereitgestellt.
+   - Alle Projektdateien, Installer und Badges wurden einheitlich auf Version `0.1.5` aktualisiert.
+
+---
+
 ## 5. Build- & Deployment-Anleitung
 
 ### 5.1 Dual-Loader Deployment (1-Klick)
@@ -428,6 +457,8 @@ Das Skript kompiliert alle Projekte und installiert die DLLs automatisch an beid
 ## 6. Tastenkombinationen & Steuerung
 
 - **`F8`**: Öffnet / Schließt das IronXNestCommand Overlay (Hotkey im Menü frei belegbar: F7 bis F12).
+- **`Enter` / `Return`**: Bestätigt die Eingabe des Lobby-Hex-Codes im Beitrittsfeld sofort.
+- **`Paste`**: Fügt den kopierten Hex-Code oder die 64-Bit Steam-ID direkt aus der Zwischenablage ein.
 - **`🏠`**: Header-Icon bzw. „🏠 ZU HOME"-Button im Einstellungen-Tab — springt aus jedem Tab zurück zur Lobby-Übersicht (§3.19).
 - **`Kopieren`**: Kopiert die 12-stellige Hex-Lobby-ID direkt in die Zwischenablage.
 - **`Einladen`**: Öffnet das native Steam-Overlay zur Freundeseinladung.
