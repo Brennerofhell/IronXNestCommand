@@ -208,7 +208,12 @@ $uFooterPanel.Controls.Add($statusStrip)
 # veralteten/falschen Breite des (selbst schon dynamisch groesse aendernden) Eltern-Panels und
 # der Button verschwand dadurch komplett aus dem sichtbaren Bereich.
 $uBtnPanel = New-Object System.Windows.Forms.FlowLayoutPanel
-$uBtnPanel.Dock          = "Fill"
+# Dock="Fill" hier (statt "Top" + feste Hoehe) verursachte einen reproduzierbaren WinForms-Bug:
+# ein FlowLayoutPanel mit Dock="Fill" verschachtelt in einem Dock="Bottom"-Panel (selbst in einer
+# TabPage/TabControl) zeichnet seine Kind-Buttons zwar mit korrekter Position/Farbe, aber OHNE
+# Text. Isoliert reproduziert und verifiziert: Dock="Top" mit expliziter Hoehe behebt es zuverlaessig.
+$uBtnPanel.Dock          = "Top"
+$uBtnPanel.Height        = 44
 $uBtnPanel.FlowDirection = "LeftToRight"
 $uBtnPanel.WrapContents  = $false
 $uBtnPanel.Padding       = New-Object System.Windows.Forms.Padding(8, 4, 8, 8)
