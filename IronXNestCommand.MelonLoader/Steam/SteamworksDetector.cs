@@ -75,30 +75,65 @@ namespace IronXNestCommand.Steam
             CheckSteamState();
         }
 
+        private static bool _resolverRegistered = false;
+
+        private static void EnsureAssemblyResolver()
+        {
+            if (_resolverRegistered) return;
+            _resolverRegistered = true;
+
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                try
+                {
+                    string asmName = new AssemblyName(args.Name).Name + ".dll";
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string[] searchDirs = {
+                        System.IO.Path.Combine(baseDir, "BepInEx", "core"),
+                        System.IO.Path.Combine(baseDir, "BepInEx", "plugins"),
+                        System.IO.Path.Combine(baseDir, "Mods"),
+                        System.IO.Path.Combine(baseDir, "UserLibs"),
+                        System.IO.Path.Combine(baseDir, "MelonLoader", "net6"),
+                        System.IO.Path.Combine(baseDir, "MelonLoader", "Dependencies")
+                    };
+                    foreach (var dir in searchDirs)
+                    {
+                        string fullPath = System.IO.Path.Combine(dir, asmName);
+                        if (System.IO.File.Exists(fullPath))
+                        {
+                            try { return Assembly.LoadFrom(fullPath); } catch { }
+                        }
+                    }
+                }
+                catch { }
+                return null;
+            };
+        }
+
         private static void ResolveTypes()
         {
-            // 0. Suche und lade ggf. IronNestCoop.Core.dll von der Festplatte falls noch nicht im AppDomain geladen
-            if (_coopSteamNetType == null)
+            EnsureAssemblyResolver();
+
+            // 0. Suche und lade ggf. BepInEx.Core.dll & IronNestCoop.Core.dll von der Festplatte
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string[] preloadPaths = {
+                System.IO.Path.Combine(baseDir, "BepInEx", "core", "BepInEx.Core.dll"),
+                System.IO.Path.Combine(baseDir, "BepInEx", "core", "BepInEx.Unity.IL2CPP.dll"),
+                System.IO.Path.Combine(baseDir, "BepInEx", "plugins", "IronNestCoop.Core.dll"),
+                System.IO.Path.Combine(baseDir, "Mods", "IronNestCoop.Core.dll"),
+                System.IO.Path.Combine(baseDir, "UserLibs", "IronNestCoop.Core.dll"),
+                System.IO.Path.Combine(baseDir, "Plugins", "IronNestCoop.Core.dll"),
+                System.IO.Path.Combine(baseDir, "IronNestCoop.Core.dll")
+            };
+            foreach (var path in preloadPaths)
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string[] candidatePaths = {
-                    System.IO.Path.Combine(baseDir, "BepInEx", "plugins", "IronNestCoop.Core.dll"),
-                    System.IO.Path.Combine(baseDir, "Mods", "IronNestCoop.Core.dll"),
-                    System.IO.Path.Combine(baseDir, "UserLibs", "IronNestCoop.Core.dll"),
-                    System.IO.Path.Combine(baseDir, "Plugins", "IronNestCoop.Core.dll"),
-                    System.IO.Path.Combine(baseDir, "IronNestCoop.Core.dll")
-                };
-                foreach (var path in candidatePaths)
+                if (System.IO.File.Exists(path))
                 {
-                    if (System.IO.File.Exists(path))
+                    try
                     {
-                        try
-                        {
-                            Assembly.LoadFrom(path);
-                            break;
-                        }
-                        catch { }
+                        Assembly.LoadFrom(path);
                     }
+                    catch { }
                 }
             }
 
@@ -315,15 +350,16 @@ namespace IronXNestCommand.Steam
                 try
                 {
                     _coopCreateLobby.Invoke(null, null);
-                    LastStatusMessage = "⏳ Erstelle Co-op Lobby...";
+                    LastStatusMessage = "Erstelle Co-op Lobby...";
                     MelonLogger.Msg("[SteamworksDetector] IronNestCoop CreateLobby aufgerufen.");
                     CheckSteamState();
                     return;
                 }
                 catch (Exception ex)
                 {
-                    LastStatusMessage = $"❌ Fehler: {ex.Message}";
-                    MelonLogger.Warning($"[SteamworksDetector] CreateLobby Fehler: {ex}");
+                    var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
+                    LastStatusMessage = $"Fehler: {inner.Message}";
+                    MelonLogger.Warning($"[SteamworksDetector] CreateLobby Fehler: {inner}");
                     return;
                 }
             }
