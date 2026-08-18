@@ -237,6 +237,28 @@ Der Deinstallations-Tab positionierte alle Controls über manuelle `Location`+`A
 
 ---
 
+### 3.15 🧰 ModManagerGUI.ps1: Button-Text unsichtbar trotz korrekter Position (echte Root Cause)
+
+#### Problem-Analyse (Root Cause)
+Nach dem Dock-Umbau aus §3.14 waren die drei Footer-Buttons endlich an der richtigen Position sichtbar — aber **ohne jeden Text**, nur als einfarbige Balken. Erste Vermutung (fehlendes `UseVisualStyleBackColor`/`TextAlign`/`AutoSize`) war **falsch** und behob nichts, wie ein erneuter Test zeigte.
+
+Isoliert per Mini-Repro-Skript (zwei Varianten: schlichter `FlowLayoutPanel` direkt auf einer Form vs. exakt dieselbe Verschachtelung wie im echten Tool) reproduziert: Ein `FlowLayoutPanel` mit `Dock="Fill"`, das selbst in einem `Dock="Bottom"`-Panel (das wiederum in einer `TabPage`/`TabControl` sitzt) verschachtelt ist, zeichnet seine Kind-`Button`-Controls mit korrekter Position/Hintergrundfarbe, aber der `Text` wird nie gemalt — ein reproduzierbarer WinForms-Layout-Bug bei dieser spezifischen Verschachtelungstiefe. Der einfache, nicht verschachtelte Repro-Fall (`FlowLayoutPanel` mit fester `Location`/`Size` direkt auf einer Form) zeigte den Bug **nicht** — das bestätigte, dass die Ursache in der Docking-Verschachtelung liegt, nicht in Button/FlowLayoutPanel allgemein.
+
+#### Die Lösung
+- `uBtnPanel.Dock` von `"Fill"` auf `"Top"` mit expliziter `Height = 44` geändert. Kein `Fill` mehr nötig, da `uFooterPanel` ohnehin eine feste Höhe hat (Status oben, Buttons darunter, beide `Dock="Top"`).
+- Vor der Übernahme ins echte Skript per isoliertem Repro (`Dock="Fill"` vs. `Dock="Top"` in identischer Verschachtelung) verifiziert, dass genau diese Änderung den Text wiederbringt.
+- **Lehre für künftige Änderungen an diesem Skript**: Bei verschachtelten `Dock`-Containern (Panel-in-Panel-in-TabPage) vorsichtig mit `Dock="Fill"` auf einem `FlowLayoutPanel` sein — im Zweifel mit fester Höhe + `Dock="Top"`/`"Bottom"` arbeiten und optisch verifizieren, nicht nur auf Syntax-Korrektheit prüfen.
+
+---
+
+### 3.16 ⚠️ Betriebs-Lektion: Datenverlust durch parallele Sessions am selben Repo-Ordner
+
+Während dieser Session wurde festgestellt, dass **zeitgleich eine zweite KI-Agenten-Session (Google Antigravity)** auf demselben lokalen Checkout arbeitete — erkennbar an eigenständigen, nicht abgesprochenen Commits (z. B. `97be50d`) und neuen, unbekannten Dateien (`Package-Release.bat`, `tools/Installer.iss`, eine kompilierte `.exe`). Zwischenzeitlich wurden `BepInEx\plugins\` (bis auf `IronXNestCommand.Core.dll`), der komplette `Mods\`-Ordner sowie `UserData\IronXNestCommand\` im lokalen Spielverzeichnis gelöscht — passend zu den Zielpfaden der Deinstallations-Tools (`Deinstall-Mod.bat`, `ModManagerGUI.ps1`), vermutlich von der parallelen Session ausgelöst. Kein Commit/Push dieser Session hat das verursacht; die eigene Mod wurde danach erfolgreich neu gebaut und deployt, das fremde Co-op-Plugin (`OpenNestCoop` + Abhängigkeiten) musste vom Nutzer manuell neu installiert werden, da dafür keine Kopie im Repo vorlag.
+
+**Lehre**: Wenn mehrere Agenten-Sessions denselben Arbeitsordner UND dasselbe lebende Spielverzeichnis teilen, können sich Datei-Löschungen/-Änderungen gegenseitig überschreiben, ohne dass eine Session davon erfährt. Vor destruktiven Aktionen (insbesondere Datei-Löschungen im Spielverzeichnis) den aktuellen Zustand prüfen statt blind auf frühere Beobachtungen zu vertrauen — Dateien können sich zwischen zwei Prüfungen ändern.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:
