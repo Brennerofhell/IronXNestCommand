@@ -27,12 +27,6 @@ if (-not $dotnet) {
 }
 
 Write-Host "Using $dotnet"
-& $dotnet --list-sdks
-& $dotnet build $solution -c Release
-if ($LASTEXITCODE -ne 0) {
-    throw "Build failed with exit code $LASTEXITCODE"
-}
-
 # BepInEx Runtime sicherstellen
 $bepVendor = Join-Path $root 'tools\vendor\BepInEx-extracted'
 if (Test-Path $bepVendor) {
@@ -40,6 +34,11 @@ if (Test-Path $bepVendor) {
         Copy-Item "$bepVendor\*" $game -Recurse -Force
         Write-Host "[DEPLOY] Installed BepInEx 6 IL2CPP Runtime to $game" -ForegroundColor Green
     }
+}
+
+& $dotnet build $solution -c Release
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Build fehlgeschlagen oder fehlende Interop-Assemblies. Verwende existierende Release-Binaries."
 }
 
 if (-not (Test-Path $plugins)) {

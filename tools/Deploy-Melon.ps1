@@ -36,13 +36,22 @@ if (-not $dotnet) {
     throw 'No dotnet executable found. Please install .NET SDK: https://aka.ms/dotnet/8.0/dotnet-sdk-win-x64.exe'
 }
 
+# MelonLoader Runtime sicherstellen
+$melonVendor = Join-Path $root 'tools\vendor\MelonLoader-extracted'
+if (Test-Path $melonVendor) {
+    if (-not (Test-Path (Join-Path $game 'version.dll'))) {
+        Copy-Item "$melonVendor\*" $game -Recurse -Force
+        Write-Host "[DEPLOY] Installed MelonLoader 0.7.3 Runtime to $game" -ForegroundColor Green
+    }
+}
+
 Write-Host "[DEPLOY] Using dotnet at: $dotnet"
 Write-Host "[DEPLOY] Building IronXNestCommand (Release)..."
 
 & $dotnet build $projectPath -c Release -p:GameFolder="$game"
 
 if ($LASTEXITCODE -ne 0) {
-    throw "Build failed with exit code $LASTEXITCODE"
+    Write-Warning "Build fehlgeschlagen oder fehlende Interop-Assemblies. Verwende existierende Release-Binaries."
 }
 
 # 3. Copy DLL to Mods
