@@ -58,7 +58,7 @@ In der Praxis führt dies zu erheblichem **Datei-Chaos**:
 |  2. EnemyDespawnGuard    -> Culling-Bypass & HideVisualRoot Despawn-Schutz        |
 |  3. CoopPunchcardFix     -> Lochkarten-Drucker-Sync für Gast-Spieler              |
 |  4. AmmoRequisitionBridge-> Requisition & Instant Co-op Resync (StartResyncNow)  |
-|  5. CommandOverlay       -> Pixel- und Token-getreues UI (520px Anthropic Design) |
+|  5. CommandOverlay       -> Pixel- und Token-getreues UI (460px Anthropic Design) |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -293,8 +293,11 @@ Auf Nachfrage geprüft: Der veröffentlichte GitHub-Release `v0.1.0` (Tag zeigte
 - **Inno Setup 6** erstmals installiert (`winget install JRSoftware.InnoSetup`) — landet per Winget-Default unter `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`, nicht unter `C:\Program Files`. `tools/Package-Release.ps1`s `$isccCandidates`-Liste kannte bisher nur klassische `Program Files`-Pfade und hätte das frisch installierte ISCC nie gefunden — Liste um den `%LOCALAPPDATA%\Programs`-Pfad ergänzt.
 - `tools/Package-Release.ps1` einmal komplett durchlaufen lassen: baut jetzt alle drei Distributionsformen konsistent aus demselben `HEAD`-Stand — `IronXNestCommand_v0.1.1.zip`, `IronXNestCommand-Installer.exe` (Standalone, eingebettete DLLs) und **neu** `IronXNestCommand_Setup_v0.1.1.exe` (richtiger Windows-Installer mit Deinstallations-Eintrag, Komponentenauswahl BepInEx/MelonLoader, automatischer Spielverzeichnis-Erkennung).
 - Neues Release `v0.1.1` auf GitHub veröffentlicht (`gh release create`), Tag zeigt auf den nach Doku-Update gepushten `HEAD` — alle drei Dateien als Assets angehängt.
+- **README ergänzt**: Der bisherige Badge-Button verlinkte generisch auf `releases/latest` (zeigte vorher auf die Version ohne .exe-Asset) — neuer, eigener `⬇ Installer (.exe)`-Badge verlinkt direkt auf `releases/download/v0.1.1/IronXNestCommand_Setup_v0.1.1.exe`, der Highlight-Callout unter den Badges ebenso; Option A im Installationsabschnitt listet jetzt alle drei Download-Formate (Setup-exe empfohlen, Standalone-exe, ZIP) explizit auf statt nur pauschal auf die Releases-Seite zu verweisen.
 
-**Lehre**: Ein GitHub-Release ist ein eigener, vom lokalen Arbeitsstand komplett entkoppelter Veröffentlichungsschritt — „ist im Code gefixt" heißt nicht „ist im veröffentlichten Download". Bei größeren Fix-Serien (hier: 12 Commits über mehrere Sessions) lohnt sich vor dem nächsten Release ein expliziter Abgleich `git log <letzter-release-tag>..HEAD`, statt sich auf das Datum des letzten Release-Eintrags zu verlassen.
+**Lehre**: Ein GitHub-Release ist ein eigener, vom lokalen Arbeitsstand komplett entkoppelter Veröffentlichungsschritt — „ist im Code gefixt" heißt nicht „ist im veröffentlichten Download". Bei größeren Fix-Serien (hier: 12 Commits über mehrere Sessions) lohnt sich vor dem nächsten Release ein expliziter Abgleich `git log <letzter-release-tag>..HEAD`, statt sich auf das Datum des letzten Release-Eintrags zu verlassen. Ein generischer „Download"-Badge, der nur auf `releases/latest` zeigt, macht das neue `.exe`-Asset für Nutzer nicht sichtbar — ein direkter, versionierter Link zur bevorzugten Installationsform gehört mit in denselben Release-Schritt, nicht als Nachgedanke.
+
+> **Versionierungs-Hinweis**: Die direkten Download-Links in README.md (Badge, Callout, Option A) sind bewusst versioniert (`v0.1.1`/`_v0.1.1.exe`) statt auf `releases/latest` zu zeigen — GitHub kann nur bei *identischen* Asset-Dateinamen über Releases hinweg einen stabilen `latest/download/<name>`-Link anbieten, unsere Dateinamen tragen aber die Version im Namen. **Bei jedem künftigen Release müssen diese drei Stellen manuell auf die neue Versionsnummer nachgezogen werden**, sonst zeigen sie auf ein gelöschtes/veraltetes Asset.
 
 ---
 
