@@ -424,21 +424,26 @@ Das per Soft-Dependency erkannte Basis-Plugin `IronNestCoop.Core.dll` zeichnet �
 #### Problem-Analyse 2 (Quadratische Platzhalter-Kästchen `□` im Menü)
 1. **Fehlende Emoji-Glyphen in Unity IMGUI:** Unitys Standard-Bitmap-Schriftart unter Windows (`GUIStyle`) unterstützt keine komplexen Unicode-Emojis wie `🏠`, `➕`, `📥`, `👑`, `🎯`, `🔄`, `📋`, `✔`, `✕`, `🛡️`, `💾`. Auf Windows-Systemen wurden diese Symbole auf allen Buttons, Tabs und Member-Karten als störende Rechtecke/Kästchen `□` dargestellt.
 
-#### Problem-Analyse 3 (IL2CPP Span-Method-Missing Exception)
-1. In `CommandOverlay.cs` rief `GUI.SetNextControlName("LobbyJoinInput")` intern eine IL2CPP-spezifische `ReadOnlySpan.GetPinnableReference()` auf, die auf bestimmten Unity IL2CPP Runtimes einen `MissingMethodException`-Absturz während `OnGUI()` auslöste.
+#### Problem-Analyse 4 (TargetInvocationException: BepInEx.Core.dll Dependency Resolution unter MelonLoader)
+1. **Versteckte BepInEx-Abhängigkeit im Co-op-Backend:** Beim Aufruf von `SteamNet.CreateLobby()` greift `IronNestCoop.Core.dll` intern auf `BepInEx.Logging.ManualLogSource` und `BepInEx.Core.Logging.Interpolation` zu.
+2. **Probing-Isolationsfehler unter MelonLoader:** Da das Spiel unter MelonLoader läuft, liegt `BepInEx.Core.dll` im Unterverzeichnis `BepInEx/core/`, welches nicht im Standard-.NET-Probing-Suchpfad von MelonLoader enthalten ist.
+3. **Auswirkung:** .NET warf eine `System.IO.FileNotFoundException: Could not load file or assembly 'BepInEx.Core'`, die bei Reflection-Aufrufen als `TargetInvocationException` (`Fehler: Exception has been thrown by the target of an invocation`) im Menü angezeigt wurde.
 
 ---
 
 #### Die Lösungen in v0.1.5
-1. **Dynamischer Festplatten-Assembly-Scanner (`SteamworksDetector.cs`):**
-   - `ResolveTypes()` durchsucht nun aktiv alle bekannten Spielordner (`BepInEx/plugins/`, `Mods/`, `UserLibs/`, `Plugins/`, Root) und lädt `IronNestCoop.Core.dll` via `Assembly.LoadFrom()` dynamisch zur Laufzeit nach.
+1. **Dynamischer Festplatten-Assembly-Scanner & Probing-Resolver (`SteamworksDetector.cs`):**
+   - `EnsureAssemblyResolver()` registriert einen globalen `AppDomain.CurrentDomain.AssemblyResolve`-Event-Handler. Dieser fängt jede ungelöste Assembly-Anfrage ab und durchsucht automatisch `BepInEx/core/`, `BepInEx/plugins/`, `Mods/`, `UserLibs/`, `MelonLoader/net6/` und `MelonLoader/Dependencies/`.
+   - Proaktives Pre-Loading: `BepInEx.Core.dll`, `BepInEx.Unity.IL2CPP.dll` und `IronNestCoop.Core.dll` werden beim Start direkt in den AppDomain geladen.
    - IL2CPP-spezifische Steamworks-Assemblies (`Il2Cppcom.rlabrecque.steamworks.net`, `Il2CppHeathen.Steamworks`) werden automatisch per `Assembly.Load()` in die Typenauflösung einbezogen.
-2. **Bereinigung der Benutzeroberfläche auf Standard-Typografie (`CommandOverlay.cs`):**
+2. **TargetInvocationException Unwrapping:**
+   - In `TryCreateLobby`, `TryJoinLobby` und `TryLeaveLobby` werden Reflection-Exceptions automatisch bis zur tatsächlichen `InnerException` aufgelöst und mit lesbarer Fehlerursache im Menü und Log dargestellt.
+3. **Bereinigung der Benutzeroberfläche auf Standard-Typografie (`CommandOverlay.cs`):**
    - Sämtliche problematischen Emojis wurden durch kristallklare, standardkonforme Textlabels und Symbole ersetzt (`+ Lobby erstellen`, `> Lobby Beitreten`, `Kommandant (Lokal)`, `Besatzung re-syncen`, `Kopiert!`, `[X]`, etc.).
    - Sämtliche `□`-Platzhalter auf Buttons, Tabs, Dialogen und Notifikationen sind damit restlos beseitigt.
-3. **Beseitigung der IL2CPP-Inkompatibilität:**
+4. **Beseitigung der IL2CPP-Inkompatibilität:**
    - `GUI.SetNextControlName` wurde restlos entfernt; Textfelder werden über native IMGUI-Event-Handler (`Event.current.keyCode == KeyCode.Return`) gesteuert.
-4. **Dual-Loader Synchronisation (BepInEx 6 & MelonLoader):**
+5. **Dual-Loader Synchronisation (BepInEx 6 & MelonLoader):**
    - `IronNestCoop.Core.dll` wird nun bei beiden Ladesystemen (`Mods/`, `UserLibs/`, `BepInEx/plugins/`) bereitgestellt.
    - Alle Projektdateien, Installer und Badges wurden einheitlich auf Version `0.1.5` aktualisiert.
 
