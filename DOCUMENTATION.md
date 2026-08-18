@@ -299,6 +299,8 @@ Auf Nachfrage geprüft: Der veröffentlichte GitHub-Release `v0.1.0` (Tag zeigte
 
 > **Versionierungs-Hinweis**: Die direkten Download-Links in README.md (Badge, Callout, Option A) sind bewusst versioniert (`v0.1.1`/`_v0.1.1.exe`) statt auf `releases/latest` zu zeigen — GitHub kann nur bei *identischen* Asset-Dateinamen über Releases hinweg einen stabilen `latest/download/<name>`-Link anbieten, unsere Dateinamen tragen aber die Version im Namen. **Bei jedem künftigen Release müssen diese drei Stellen manuell auf die neue Versionsnummer nachgezogen werden**, sonst zeigen sie auf ein gelöschtes/veraltetes Asset.
 
+> **SmartScreen-Warnung bei den .exe-Installern (kein Virenfund)**: Sowohl `IronXNestCommand-Installer.exe` (Standalone, `csc.exe`-kompiliert) als auch `IronXNestCommand_Setup_v0.1.1.exe` (Inno Setup) lösen beim ersten Download/Ausführen die Windows-SmartScreen-Warnung „Windows hat Ihren PC geschützt" aus. Verifiziert per `Get-MpThreatDetection`/`Get-MpThreat` (Windows Defender) direkt nach dem Build — **beide leer**, also keine tatsächliche Malware-Erkennung, sondern reine Reputationsprüfung: unsignierte, brandneue Datei ohne Download-Historie bei Microsoft. Betrifft praktisch jeden frisch kompilierten, nicht code-signierten Installer eines kleinen/neuen Projekts und verschwindet mit steigender Download-/Ausführungszahl von selbst (oder sofort mit einem kostenpflichtigen EV-Code-Signing-Zertifikat, das für dieses Hobby-Projekt aktuell nicht vorgesehen ist). In README.md unter Option A als Hinweis dokumentiert („Weitere Informationen" → „Trotzdem ausführen"), ZIP-Paket als SmartScreen-freie Alternative genannt.
+
 ---
 
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung

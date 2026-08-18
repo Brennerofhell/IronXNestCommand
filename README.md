@@ -57,6 +57,8 @@ Verhindert das unerwartete Verschwinden oder Despawnen von gegnerischen Einheite
 2. Installer ausführen bzw. ZIP entpacken und `Install-Mod.bat` doppelklicken (Spielverzeichnis wird automatisch gefunden).
 3. Voraussetzung: BepInEx 6 (IL2CPP) oder MelonLoader 0.7.3+ (IL2CPP) muss bereits im Spielverzeichnis installiert sein.
 
+> ⚠️ **Windows SmartScreen** ("Windows hat Ihren PC geschützt") kann bei den beiden `.exe`-Installern erscheinen — die Dateien sind (noch) nicht code-signiert und haben als frisch veröffentlichtes Release noch keine Download-Reputation bei Microsoft aufgebaut. Das ist **kein Virenfund**, nur eine Reputationswarnung für neue, unsignierte Programme. Auf **"Weitere Informationen"** → **"Trotzdem ausführen"** klicken, oder alternativ das ZIP-Paket verwenden (löst keine SmartScreen-Prüfung aus).
+
 ### Option B: Selbst bauen & direkt deployen
 Führe im Projektverzeichnis einfach [`Build-And-Deploy.bat`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/Build-And-Deploy.bat) aus.
 
