@@ -66,20 +66,17 @@ In der Praxis führt dies zu erheblichem **Datei-Chaos**:
 
 ## 3. Detaillierte Bugfixes & Problemlösungen
 
-### 3.1 🛡️ Gegner-Despawn & Culling-Schutz (`EnemyDespawnGuard.cs`)
+### 3.1 🛡️ 3D-Culling-Schutz & Nebel-des-Krieges-Integrität (`EnemyDespawnGuard.cs`)
 
 #### Problem-Analyse (Root Cause)
-Im Mehrspieler-/Co-op-Modus verschwanden gegnerische Ziele oder Karteneinheiten unerwartet für den Host oder die Mitspieler. Die Ursachen lagen im Unity-Rendering- und Sichtbarkeits-Lifecycle:
-1. **`MinimalVolumeCulling.CullTarget.ApplyCulled(true)`**: Wenn die Kamera des Spielers wegdrehte oder ein Raum gewechselt wurde, deaktivierte das Culling-System die Ziel-GameObjects.
-2. **`EntityLocation.HideVisualRoot()`**: Wurde aufgerufen, sobald Scan-Fenster von Beobachtern abliefen oder Sichtbarkeitsprüfungen auf Gast-Rechnern fehlschlugen. Dies setzte `VisibilityGroup.alpha = 0` und blendete den `VisualRoot` aus.
-3. **`EntityLocation.StartWithVisualRootHidden = true`**: Neu gespawnte Gegner wurden standardmäßig mit unsichtbarem VisualRoot instanziiert.
+Im Mehrspieler-/Co-op-Modus verschwanden 3D-Ziele unerwartet beim Wegdrehen der Spielerkamera durch das Unity-Rendering-Culling (`MinimalVolumeCulling.CullTarget.ApplyCulled(true)`). 
+
+*Hinweis zur Aufklärung/Nebel des Krieges:* Einheiten auf dem Kartentisch (`EntityLocation`) besitzen im Spiel regulär `StartWithVisualRootHidden = true` und werden erst durch Aufklärung (Recon-Fenster, Spotter, Funkmeldung) aufgedeckt. Ein früheres Überschreiben von `HideVisualRoot` und `Init` hatte diesen Nebel des Krieges versehentlich global deaktiviert.
 
 #### Die Lösung
-- **`OnHideVisualRoot_Prefix`**: Fängt den Aufruf ab. Solange `entity.IsAlive == true` ist, wird das Verstecken übersprungen (`return false`) und `VisualRoot.SetActive(true)` sowie `VisibilityGroup.alpha = 1.0f` erzwungen.
-- **`OnInit_Postfix`**: Setzt `StartWithVisualRootHidden = false` und aktiviert neu initialisierte Gegner sofort.
-- **`OnApplyCulled_Prefix`**: Setzt `neverCull = true` und verhindert das Deaktivieren von lebenden Einheiten.
-- **`UpdateWatchdog`**: Scannt alle 1,5 Sekunden alle `EntityLocation`-Instanzen und reaktiviert fälschlicherweise unsichtbar gemachte Feindeinheiten.
-- **UI-Steuerung**: Über den Einstellungs-Tab (`🛡️ Gegner-Despawn Schutz`) jederzeit an- und abschaltbar.
+- **`OnApplyCulled_Prefix`**: Greift beim 3D-Volumen-Culling (`MinimalVolumeCulling.CullTarget`) ein und verhindert das Deaktivieren von Einheiten, bei denen `neverCull = true` aktiv ist.
+- **Aufklärungs-Integrität (`EntityLocation`)**: Unaufgeklärte Verbündete und Feinde verbleiben wie vom Spiel vorgesehen verdeckt, bis sie regulär durch Aufklärung/Spotter aufgedeckt werden.
+- **UI-Steuerung**: Über den Einstellungs-Tab (`🛡️ Culling-Schutz`) konfigurierbar.
 
 ---
 

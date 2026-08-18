@@ -19,11 +19,10 @@ Das Interface wurde 1:1 nach der offiziellen **Anthropic / Dieselpunk Design-Vor
 
 ## 🎯 Kern-Features & Problemlösungen
 
-### 1. 🛡️ Gegner-Despawn & Culling-Schutz (`EnemyDespawnGuard.cs`)
-Verhindert das unerwartete Verschwinden oder Despawnen von gegnerischen Einheiten und Zielen im Co-op:
-- **Culling-Bypass:** Hält lebende Einheiten aktiv, auch wenn der Spieler in einen anderen Raum blickt.
-- **Sichtbarkeits-Override:** Überschreibt fehlerhafte `HideVisualRoot`-Aufrufe und Nebel-Timeouts solange die Einheit lebt.
-- **Aktiver Watchdog (1,5 s):** Überprüft kontinuierlich alle `EntityLocation`-Objekte und stellt die Sichtbarkeit sicher.
+### 1. 🛡️ 3D-Culling-Schutz & Nebel-des-Krieges-Integrität (`EnemyDespawnGuard.cs`)
+Verhindert das unerwartete Verschwinden oder Despawnen von 3D-Zielen im Co-op durch Unitys Volumen-Culling:
+- **Culling-Bypass:** Hält lebende Einheiten mit `neverCull` aktiv, auch wenn der Spieler in einen anderen Raum blickt.
+- **Aufklärungs-Integrität:** Das originale Spielsystem für Aufklärung und den Nebel des Krieges bleibt vollständig erhalten — unaufgeklärte Verbündete und Feinde werden erst bei tatsächlicher Aufklärung/Spotter-Sichtung auf dem Kartentisch sichtbar.
 - **Einstellbar:** Über das In-Game-Menü (`[F8] -> Einstellungen`) jederzeit per Klick umschaltbar.
 
 ---

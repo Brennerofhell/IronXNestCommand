@@ -7,20 +7,15 @@ using IronXNestCommand.Host.BepInEx.Overlay;
 
 namespace IronXNestCommand.Host.BepInEx.Patches
 {
+    /// <summary>
+    /// Verhindert das fehlerhafte 3D-Volumen-Culling im Spiel,
+    /// ohne das reguläre Nebel-des-Krieges- und Aufklärungssystem (EntityLocation) zu manipulieren.
+    /// </summary>
     public static class EnemyDespawnGuard
     {
-        private static float _watchdogTimer = 0f;
-        private const float WatchdogInterval = 1.5f;
         private static bool _patchesApplied = false;
 
-        private static Type _entityLocationType;
         private static Type _cullTargetType;
-        private static PropertyInfo _entityProp;
-        private static PropertyInfo _isAliveProp;
-        private static PropertyInfo _visualRootProp;
-        private static PropertyInfo _visibilityGroupProp;
-        private static PropertyInfo _alphaProp;
-        private static PropertyInfo _startHiddenProp;
         private static PropertyInfo _neverCullProp;
 
         public static void InitializePatches(Harmony harmony)
@@ -29,20 +24,12 @@ namespace IronXNestCommand.Host.BepInEx.Patches
 
             try
             {
-                // 1. Hook: EntityLocation.HideVisualRoot
-                TryPatchMethod(harmony, "EntityLocation, Assembly-CSharp", "HideVisualRoot",
-                    prefix: typeof(EnemyDespawnGuard).GetMethod(nameof(OnHideVisualRoot_Prefix), BindingFlags.Public | BindingFlags.Static));
-
-                // 2. Hook: EntityLocation.Init
-                TryPatchMethod(harmony, "EntityLocation, Assembly-CSharp", "Init",
-                    postfix: typeof(EnemyDespawnGuard).GetMethod(nameof(OnInit_Postfix), BindingFlags.Public | BindingFlags.Static));
-
-                // 3. Hook: MinimalVolumeCulling.CullTarget.ApplyCulled
+                // Hook: MinimalVolumeCulling.CullTarget.ApplyCulled (3D Volume Culling)
                 TryPatchMethod(harmony, "MinimalVolumeCulling.CullTarget, Assembly-CSharp", "ApplyCulled",
                     prefix: typeof(EnemyDespawnGuard).GetMethod(nameof(OnApplyCulled_Prefix), BindingFlags.Public | BindingFlags.Static));
 
                 _patchesApplied = true;
-                ModLogger.Info("[EnemyDespawnGuard] ✔ Gegner-Despawn Schutz & Culling-Guard erfolgreich aktiviert.");
+                ModLogger.Info("[EnemyDespawnGuard] ✔ 3D-Culling-Guard erfolgreich aktiviert.");
             }
             catch (Exception ex)
             {
@@ -66,21 +53,7 @@ namespace IronXNestCommand.Host.BepInEx.Patches
 
                 if (type == null) return;
 
-                if (type.Name == "EntityLocation")
-                {
-                    _entityLocationType = type;
-                    _entityProp = type.GetProperty("Entity");
-                    _visualRootProp = type.GetProperty("VisualRoot");
-                    _visibilityGroupProp = type.GetProperty("VisibilityGroup");
-                    _startHiddenProp = type.GetProperty("StartWithVisualRootHidden");
-
-                    var vgType = _visibilityGroupProp?.PropertyType;
-                    _alphaProp = vgType?.GetProperty("alpha");
-
-                    var entityType = _entityProp?.PropertyType;
-                    _isAliveProp = entityType?.GetProperty("IsAlive");
-                }
-                else if (type.Name == "CullTarget")
+                if (type.Name == "CullTarget")
                 {
                     _cullTargetType = type;
                     _neverCullProp = type.GetProperty("neverCull");
@@ -101,69 +74,6 @@ namespace IronXNestCommand.Host.BepInEx.Patches
             }
         }
 
-        public static bool OnHideVisualRoot_Prefix(object __instance)
-        {
-            if (__instance == null) return true;
-            if (!CommandOverlay.Config.PreventEnemyDespawn) return true;
-
-            try
-            {
-                if (_entityProp != null)
-                {
-                    var entity = _entityProp.GetValue(__instance);
-                    if (entity != null)
-                    {
-                        bool isAlive = _isAliveProp != null ? (bool)(_isAliveProp.GetValue(entity) ?? true) : true;
-                        if (isAlive)
-                        {
-                            var visualRoot = _visualRootProp?.GetValue(__instance) as GameObject;
-                            if (visualRoot != null && !visualRoot.activeSelf)
-                            {
-                                visualRoot.SetActive(true);
-                            }
-
-                            var vg = _visibilityGroupProp?.GetValue(__instance);
-                            if (vg != null && _alphaProp != null)
-                            {
-                                _alphaProp.SetValue(vg, 1.0f);
-                            }
-
-                            return false; // Skip HideVisualRoot!
-                        }
-                    }
-                }
-            }
-            catch { }
-            return true;
-        }
-
-        public static void OnInit_Postfix(object __instance, object entity)
-        {
-            if (__instance == null) return;
-            if (!CommandOverlay.Config.PreventEnemyDespawn) return;
-
-            try
-            {
-                if (_startHiddenProp != null)
-                {
-                    _startHiddenProp.SetValue(__instance, false);
-                }
-
-                var visualRoot = _visualRootProp?.GetValue(__instance) as GameObject;
-                if (visualRoot != null && !visualRoot.activeSelf)
-                {
-                    visualRoot.SetActive(true);
-                }
-
-                var vg = _visibilityGroupProp?.GetValue(__instance);
-                if (vg != null && _alphaProp != null)
-                {
-                    _alphaProp.SetValue(vg, 1.0f);
-                }
-            }
-            catch { }
-        }
-
         public static bool OnApplyCulled_Prefix(object __instance, ref bool culled)
         {
             if (__instance == null) return true;
@@ -179,20 +89,6 @@ namespace IronXNestCommand.Host.BepInEx.Patches
                         culled = false;
                         return false;
                     }
-
-                    if (__instance is Component comp)
-                    {
-                        if (_entityLocationType != null)
-                        {
-                            var el = comp.GetComponent(Il2CppInterop.Runtime.Il2CppType.From(_entityLocationType));
-                            if (el != null)
-                            {
-                                _neverCullProp.SetValue(__instance, true);
-                                culled = false;
-                                return false;
-                            }
-                        }
-                    }
                 }
             }
             catch { }
@@ -201,72 +97,8 @@ namespace IronXNestCommand.Host.BepInEx.Patches
 
         public static void UpdateWatchdog(float deltaTime)
         {
-            if (!CommandOverlay.Config.PreventEnemyDespawn) return;
-
-            _watchdogTimer += deltaTime;
-            if (_watchdogTimer < WatchdogInterval) return;
-            _watchdogTimer = 0f;
-
-            try
-            {
-                if (_entityLocationType == null) return;
-                var il2cppType = Il2CppInterop.Runtime.Il2CppType.From(_entityLocationType);
-                if (il2cppType == null) return;
-
-                var locations = UnityEngine.Object.FindObjectsOfType(il2cppType);
-                if (locations == null || locations.Length == 0) return;
-
-                int protectedCount = 0;
-                for (int i = 0; i < locations.Length; i++)
-                {
-                    var el = locations[i];
-                    if (el == null) continue;
-
-                    var entity = _entityProp?.GetValue(el);
-                    if (entity != null)
-                    {
-                        bool isAlive = _isAliveProp != null ? (bool)(_isAliveProp.GetValue(entity) ?? true) : true;
-                        if (isAlive)
-                        {
-                            bool wasHidden = false;
-                            var visualRoot = _visualRootProp?.GetValue(el) as GameObject;
-                            if (visualRoot != null && !visualRoot.activeSelf)
-                            {
-                                visualRoot.SetActive(true);
-                                wasHidden = true;
-                            }
-
-                            var vg = _visibilityGroupProp?.GetValue(el);
-                            if (vg != null && _alphaProp != null)
-                            {
-                                float a = (float)(_alphaProp.GetValue(vg) ?? 1f);
-                                if (a < 0.8f)
-                                {
-                                    _alphaProp.SetValue(vg, 1f);
-                                    wasHidden = true;
-                                }
-                            }
-
-                            if (el is Component comp && comp.gameObject != null && !comp.gameObject.activeSelf)
-                            {
-                                comp.gameObject.SetActive(true);
-                                wasHidden = true;
-                            }
-
-                            if (wasHidden)
-                            {
-                                protectedCount++;
-                            }
-                        }
-                    }
-                }
-
-                if (protectedCount > 0)
-                {
-                    ModLogger.Info($"[EnemyDespawnGuard] 🛡️ {protectedCount} Feindeinheit(en) vor dem Despawnen gerettet und sichtbar gehalten.");
-                }
-            }
-            catch { }
+            // Watchdog manipuliert keine EntityLocation-Objekte mehr,
+            // um das Spiel-eigene Nebel-des-Krieges- und Aufklärungssystem nicht zu brechen.
         }
     }
 }

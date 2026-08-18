@@ -518,7 +518,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             GUI.Label(new Rect(x + 285, iy, 140, 22), "(Klick zum Wechseln)", _lobbySubtextStyle);
 
             iy += 36;
-            Config.PreventEnemyDespawn = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.PreventEnemyDespawn, "🛡️ Gegner-Despawn Schutz (Permanente Ziel-Sichtbarkeit)");
+            Config.PreventEnemyDespawn = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.PreventEnemyDespawn, "🛡️ Culling-Schutz (Verhindert 3D-Despawn)");
 
             iy += 32;
             Config.StartVisible = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.StartVisible, "Lobbymenü beim Spielstart direkt anzeigen");
