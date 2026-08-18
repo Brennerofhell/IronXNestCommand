@@ -1,0 +1,101 @@
+name: Build, Sign & Release
+
+# Builds the ZIP + standalone installer + Inno Setup installer on a tag push
+# (e.g. v0.1.2), submits both .exe files to SignPath for code signing so
+# Windows SmartScreen no longer shows the "unrecognized app" warning on
+# fresh downloads (see DOCUMENTATION.md §3.22), then publishes everything
+# to a GitHub Release.
+#
+# One-time setup required before this workflow can sign anything — see
+# DOCUMENTATION.md §3.23 for the full walkthrough:
+#   1. Register the project at https://signpath.io (free for qualifying
+#      open-source projects) and create a SignPath project with two
+#      artifact configurations (root type <executable-file>):
+#        - "standalone-installer" for IronXNestCommand-Installer.exe
+#        - "setup-installer"      for IronXNestCommand_Setup_v*.exe
+#   2. Create a signing policy (e.g. "release-signing") under that project.
+#   3. Add these to the repo's Settings -> Secrets and variables -> Actions:
+#        Secrets:   SIGNPATH_API_TOKEN
+#        Variables: SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG,
+#                   SIGNPATH_SIGNING_POLICY_SLUG
+#
+# Until that setup is done, this workflow will fail at the "Submit ... for
+# signing" steps — the build/package steps still work standalone via
+# tools/Package-Release.ps1 either way.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-sign-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build release artifacts (ZIP + standalone exe + Inno Setup exe)
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/Package-Release.ps1
+
+      - name: Upload unsigned standalone installer
+        id: upload-standalone
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-standalone-installer
+          path: dist/IronXNestCommand-Installer.exe
+
+      - name: Upload unsigned setup installer
+        id: upload-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup-installer
+          path: dist/IronXNestCommand_Setup_*.exe
+
+      - name: Submit standalone installer for signing
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: "${{ secrets.SIGNPATH_API_TOKEN }}"
+          organization-id: "${{ vars.SIGNPATH_ORGANIZATION_ID }}"
+          project-slug: "${{ vars.SIGNPATH_PROJECT_SLUG }}"
+          signing-policy-slug: "${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}"
+          artifact-configuration-slug: "standalone-installer"
+          github-artifact-id: "${{ steps.upload-standalone.outputs.artifact-id }}"
+          wait-for-completion: true
+          output-artifact-directory: "signed/standalone"
+
+      - name: Submit setup installer for signing
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: "${{ secrets.SIGNPATH_API_TOKEN }}"
+          organization-id: "${{ vars.SIGNPATH_ORGANIZATION_ID }}"
+          project-slug: "${{ vars.SIGNPATH_PROJECT_SLUG }}"
+          signing-policy-slug: "${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}"
+          artifact-configuration-slug: "setup-installer"
+          github-artifact-id: "${{ steps.upload-setup.outputs.artifact-id }}"
+          wait-for-completion: true
+          output-artifact-directory: "signed/setup"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/IronXNestCommand_v*.zip
+            signed/standalone/*.exe
+            signed/setup/*.exe
+          generate_release_notes: true

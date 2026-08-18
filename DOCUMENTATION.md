@@ -299,7 +299,28 @@ Auf Nachfrage geprüft: Der veröffentlichte GitHub-Release `v0.1.0` (Tag zeigte
 
 > **Versionierungs-Hinweis**: Die direkten Download-Links in README.md (Badge, Callout, Option A) sind bewusst versioniert (`v0.1.1`/`_v0.1.1.exe`) statt auf `releases/latest` zu zeigen — GitHub kann nur bei *identischen* Asset-Dateinamen über Releases hinweg einen stabilen `latest/download/<name>`-Link anbieten, unsere Dateinamen tragen aber die Version im Namen. **Bei jedem künftigen Release müssen diese drei Stellen manuell auf die neue Versionsnummer nachgezogen werden**, sonst zeigen sie auf ein gelöschtes/veraltetes Asset.
 
-> **SmartScreen-Warnung bei den .exe-Installern (kein Virenfund)**: Sowohl `IronXNestCommand-Installer.exe` (Standalone, `csc.exe`-kompiliert) als auch `IronXNestCommand_Setup_v0.1.1.exe` (Inno Setup) lösen beim ersten Download/Ausführen die Windows-SmartScreen-Warnung „Windows hat Ihren PC geschützt" aus. Verifiziert per `Get-MpThreatDetection`/`Get-MpThreat` (Windows Defender) direkt nach dem Build — **beide leer**, also keine tatsächliche Malware-Erkennung, sondern reine Reputationsprüfung: unsignierte, brandneue Datei ohne Download-Historie bei Microsoft. Betrifft praktisch jeden frisch kompilierten, nicht code-signierten Installer eines kleinen/neuen Projekts und verschwindet mit steigender Download-/Ausführungszahl von selbst (oder sofort mit einem kostenpflichtigen EV-Code-Signing-Zertifikat, das für dieses Hobby-Projekt aktuell nicht vorgesehen ist). In README.md unter Option A als Hinweis dokumentiert („Weitere Informationen" → „Trotzdem ausführen"), ZIP-Paket als SmartScreen-freie Alternative genannt.
+> **SmartScreen-Warnung bei den .exe-Installern (kein Virenfund)**: Sowohl `IronXNestCommand-Installer.exe` (Standalone, `csc.exe`-kompiliert) als auch `IronXNestCommand_Setup_v0.1.1.exe` (Inno Setup) lösen beim ersten Download/Ausführen die Windows-SmartScreen-Warnung „Windows hat Ihren PC geschützt" aus. Verifiziert per `Get-MpThreatDetection`/`Get-MpThreat` (Windows Defender) direkt nach dem Build — **beide leer**, also keine tatsächliche Malware-Erkennung, sondern reine Reputationsprüfung: unsignierte, brandneue Datei ohne Download-Historie bei Microsoft. Betrifft praktisch jeden frisch kompilierten, nicht code-signierten Installer eines kleinen/neuen Projekts und verschwindet mit steigender Download-/Ausführungszahl von selbst. Langfristige Lösung (Code-Signing) in §3.23 eingerichtet.
+
+---
+
+### 3.23 🔏 CI-Pipeline für automatisches Code-Signing (SignPath) eingerichtet
+
+#### Ausgangslage
+§3.22 dokumentierte die SmartScreen-Warnung als reine Reputationsprüfung ohne echten Fund — als dauerhafte Lösung dafür kommt praktisch nur ein Code-Signing-Zertifikat infrage (baut sofort Vertrauen auf, statt erst über Wochen/Downloads Reputation zu sammeln). Ein kommerzielles Zertifikat ist für dieses Hobby-Projekt nicht vorgesehen; [SignPath.io](https://signpath.io) bietet aber kostenloses Code-Signing für qualifizierende Open-Source-Projekte (öffentliches Repo, nachvollziehbarer CI-Build) über eine GitHub-Actions-Integration.
+
+#### Umsetzung
+- Neuer Workflow `.github/workflows/release.yml`: löst bei jedem Push eines `vX.Y.Z`-Tags aus, baut auf `windows-latest` via `tools/Package-Release.ps1` (identisch zum lokalen Release-Prozess aus §3.22 — Inno Setup wird auf dem Runner per `choco install innosetup` bereitgestellt), lädt die beiden unsignierten `.exe`-Dateien als Workflow-Artefakte hoch, reicht sie einzeln per `signpath/github-action-submit-signing-request@v2` bei SignPath zur Signierung ein und veröffentlicht anschließend automatisch ein GitHub-Release mit ZIP + beiden signierten `.exe`-Dateien (`softprops/action-gh-release@v2`).
+- Zwei getrennte SignPath-„Artifact Configurations" vorgesehen (`standalone-installer`, `setup-installer`), da `IronXNestCommand-Installer.exe` und `IronXNestCommand_Setup_v*.exe` unterschiedliche Build-Artefakte sind, die SignPath jeweils einzeln validieren muss.
+- **Einmalige manuelle Einrichtung durch den Projekt-Owner erforderlich, bevor die Pipeline tatsächlich signiert** (kann nicht automatisiert werden — erfordert Registrierung/Freigabe bei einem externen Dienst):
+  1. Projekt auf [signpath.io](https://signpath.io) registrieren (kostenlos für qualifizierende OSS-Projekte).
+  2. Im SignPath-Projekt zwei Artifact Configurations anlegen (Root-Typ `<executable-file>`): `standalone-installer` und `setup-installer`.
+  3. Eine Signing Policy anlegen (z. B. `release-signing`).
+  4. In den GitHub-Repo-Einstellungen (`Settings → Secrets and variables → Actions`) hinterlegen:
+     - Secret `SIGNPATH_API_TOKEN`
+     - Variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`
+- Bis diese Einrichtung erfolgt ist, schlägt der Workflow an den „Submit ... for signing"-Schritten fehl — Build und Paketierung (ZIP/Standalone-exe/Setup-exe) funktionieren davon unabhängig weiterhin lokal über `tools/Package-Release.ps1` wie in §3.22, das manuelle `gh release create`-Verfahren bleibt also so lange der Fallback.
+
+**Nächster Release-Vorgang** (nach abgeschlossener SignPath-Einrichtung): einfach `git tag vX.Y.Z && git push origin vX.Y.Z` — Build, Signierung und Release-Veröffentlichung laufen dann vollautomatisch über die Actions-Pipeline statt über den bisherigen manuellen `Package-Release.ps1` + `gh release create`-Ablauf.
 
 ---
 
