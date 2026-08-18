@@ -331,8 +331,6 @@ namespace IronXNestCommand.UI
                 GUI.Label(new Rect(x + 14, y + 8, w - 28, 16), "Lobby Hex-Code oder 64-Bit Steam-ID eingeben:", _lobbySubtextStyle);
 
                 DrawBox(new Rect(x + 14, y + 28, w - 170, 28), _texMasterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
-                
-                GUI.SetNextControlName("LobbyJoinInput");
                 _lobbyIdInput = GUI.TextField(new Rect(x + 20, y + 30, w - 182, 24), _lobbyIdInput ?? "", 32, _inputFieldStyle ?? _memberNameStyle);
 
                 if (DrawButton(new Rect(x + w - 150, y + 28, 64, 28), "📋 Paste", _btnOutlineStyle))
