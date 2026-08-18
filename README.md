@@ -1,8 +1,8 @@
 # ✦ IronXNestCommand // Co-op Lobby, Feind-Schutz & Lochkarten-Sync ✦
 
-[![⬇ Installer (.exe)](https://img.shields.io/badge/%E2%AC%87%20Installer-.exe-D97757?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.4/IronXNestCommand_Setup_v0.1.4.exe)
-[![⬇ Download](https://img.shields.io/github/v/release/Brennerofhell/IronXNestCommand?style=for-the-badge&label=%E2%AC%87%20Alle%20Downloads&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)
-[![Alle Releases](https://img.shields.io/github/downloads/Brennerofhell/IronXNestCommand/total?style=for-the-badge&label=Downloads&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases)
+[![Installer (.exe)](https://img.shields.io/badge/Installer-.exe-D97757?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Brennerofhell/IronXNestCommand/releases/download/v0.1.4/IronXNestCommand_Setup_v0.1.4.exe)
+[![Version & Downloads](https://img.shields.io/github/v/release/Brennerofhell/IronXNestCommand?style=for-the-badge&label=Release&logo=github&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases/latest)
+[![Alle Downloads](https://img.shields.io/github/downloads/Brennerofhell/IronXNestCommand/total?style=for-the-badge&label=Downloads&color=1F1E1D)](https://github.com/Brennerofhell/IronXNestCommand/releases)
 
 [![Target Game](https://img.shields.io/badge/Game-Iron_Nest:_Heavy_Turret_Simulator-blue?style=for-the-badge)](https://store.steampowered.com)
 [![Modloader](https://img.shields.io/badge/ModLoader-MelonLoader_/_BepInEx_6-green?style=for-the-badge)](https://github.com/LavaGang/MelonLoader)
