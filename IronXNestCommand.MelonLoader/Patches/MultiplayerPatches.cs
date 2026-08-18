@@ -23,6 +23,8 @@ namespace IronXNestCommand.Patches
         /// </summary>
         public static void TryApplyDynamicPatches(HarmonyLib.Harmony harmony)
         {
+            ApplyCoopUIPatches(harmony);
+
             if (!SteamworksDetector.IsSteamAvailable)
             {
                 MelonLogger.Msg("[MultiplayerPatches] Steam nicht verfügbar — dynamische Patches übersprungen.");
@@ -60,6 +62,41 @@ namespace IronXNestCommand.Patches
             {
                 MelonLogger.Warning($"[MultiplayerPatches] Dynamischer Patch fehlgeschlagen: {ex.Message}");
             }
+        }
+
+        private static void ApplyCoopUIPatches(HarmonyLib.Harmony harmony)
+        {
+            try
+            {
+                System.Type coopRunnerType = FindTypeInAllAssemblies("IronNestCoop.Core.CoopRunner");
+                if (coopRunnerType != null)
+                {
+                    var prefix = typeof(MultiplayerPatches).GetMethod(nameof(SuppressDraw_Prefix), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                    var drawCoopPanel = coopRunnerType.GetMethod("DrawCoopPanel", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var drawOptionsPanel = coopRunnerType.GetMethod("DrawOptionsPanel", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                    if (drawCoopPanel != null && prefix != null)
+                    {
+                        harmony.Patch(drawCoopPanel, prefix: new HarmonyMethod(prefix));
+                        MelonLogger.Msg("[MultiplayerPatches] ✔ Standard IronNestCoop Panel erfolgreich deaktiviert (unser GUI ist aktiv).");
+                    }
+
+                    if (drawOptionsPanel != null && prefix != null)
+                    {
+                        harmony.Patch(drawOptionsPanel, prefix: new HarmonyMethod(prefix));
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MelonLogger.Warning($"[MultiplayerPatches] Fehler beim Deaktivieren des alten Coop-Panels: {ex.Message}");
+            }
+        }
+
+        public static bool SuppressDraw_Prefix()
+        {
+            // Verhindert das Zeichnen des alten, unvollständigen IronNestCoop Standard-Panels oben links
+            return false;
         }
 
         // Wird von Harmony aufgerufen wenn LeaveLobby() im Spiel ausgeführt wird
