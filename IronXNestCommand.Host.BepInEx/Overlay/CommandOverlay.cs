@@ -75,6 +75,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static GUIStyle _footerTextStyle;
         private static GUIStyle _hotkeyStyle;
         private static GUIStyle _notificationStyle;
+        private static GUIStyle _inputFieldStyle;
 
         private static bool _stylesInitialized = false;
 
@@ -172,7 +173,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             float wh = _windowRect.height;
 
             // 1. Master Dialog Background (#18181B mit #27272A Border)
-            DrawBox(new Rect(wx, wy, ww, wh), _texMasterBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(wx, wy, ww, wh), _texMasterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
 
             // 2. Header Bar
             DrawHeader(wx, wy, ww);
@@ -191,7 +192,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 }
             }
 
-            DrawDivider(new Rect(wx + 18, tabY + 32, ww - 36, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawDivider(new Rect(wx + 18, tabY + 32, ww - 36, 1), new Color(0.820f, 0.800f, 0.765f, 1f));
 
             // 4. Content Area
             float cx = wx + 18;
@@ -238,7 +239,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             float pillW = 110;
             float pillX = wx + ww - pillW - 60;
             float pillY = wy + 14;
-            DrawBox(new Rect(pillX, pillY, pillW, 24), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(pillX, pillY, pillW, 24), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
 
             Texture2D dotTex = online ? _texDotGreen : _texDotGrey;
             GUI.DrawTexture(new Rect(pillX + 10, pillY + 9, 6, 6), dotTex);
@@ -257,7 +258,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             }
 
             // Bottom line under header
-            DrawDivider(new Rect(wx, wy + 48, ww, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawDivider(new Rect(wx, wy + 48, ww, 1), new Color(0.820f, 0.800f, 0.765f, 1f));
         }
 
         // ==================== TAB 0: LOBBY & BESATZUNG CONTENT ====================
@@ -276,7 +277,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (!inLobby && !_joinInputMode)
             {
                 // Unconnected State (Dashed Container)
-                DrawBox(new Rect(x, y, w, 78), _texCardDashed, new Color(0.153f, 0.153f, 0.165f, 0.8f));
+                DrawBox(new Rect(x, y, w, 78), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
                 GUI.Label(new Rect(x + 14, y + 10, w - 28, 20), "Noch keine Lobby aktiv. Erzeuge eine Hex-ID oder trete einer Besatzung bei.", _lobbySubtextStyle);
 
                 float btnHalf = (w - 36) / 2f;
@@ -297,12 +298,13 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             else if (!inLobby && _joinInputMode)
             {
                 // Join Input Box
-                DrawBox(new Rect(x, y, w, 84), _texCardBg, new Color(0.247f, 0.247f, 0.275f, 1f));
+                DrawBox(new Rect(x, y, w, 84), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
                 GUI.Label(new Rect(x + 14, y + 8, w - 28, 16), "Lobby Hex-Code oder 64-Bit Steam-ID eingeben:", _lobbySubtextStyle);
 
-                DrawBox(new Rect(x + 14, y + 28, w - 170, 28), _texMasterBg, new Color(0.247f, 0.247f, 0.275f, 1f));
-                string disp = string.IsNullOrEmpty(_lobbyIdInput) ? "<Hex-Code oder ID>" : _lobbyIdInput;
-                GUI.Label(new Rect(x + 22, y + 32, w - 186, 20), disp, string.IsNullOrEmpty(_lobbyIdInput) ? _lobbySubtextStyle : _memberNameStyle);
+                DrawBox(new Rect(x + 14, y + 28, w - 170, 28), _texMasterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
+                
+                GUI.SetNextControlName("LobbyJoinInput");
+                _lobbyIdInput = GUI.TextField(new Rect(x + 20, y + 30, w - 182, 24), _lobbyIdInput ?? "", 32, _inputFieldStyle ?? _memberNameStyle);
 
                 if (DrawButton(new Rect(x + w - 150, y + 28, 64, 28), "📋 Paste", _btnOutlineStyle))
                 {
@@ -316,14 +318,24 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 }
 
                 bool hasInput = !string.IsNullOrWhiteSpace(_lobbyIdInput);
+                bool submitJoin = false;
+
                 if (DrawButton(new Rect(x + w - 82, y + 28, 70, 28), "Beitreten", hasInput ? _btnTerracottaStyle : _btnDarkStyle))
                 {
-                    if (hasInput)
-                    {
-                        SteamworksDetector.TryJoinLobby(_lobbyIdInput);
-                        AudioFeedback.PlayClick();
-                        ShowNotification($"⏳ Trete '{_lobbyIdInput.Trim()}' bei...");
-                    }
+                    submitJoin = true;
+                }
+
+                if (hasInput && Event.current != null && Event.current.isKey && Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
+                {
+                    submitJoin = true;
+                    Event.current.Use();
+                }
+
+                if (submitJoin && hasInput)
+                {
+                    SteamworksDetector.TryJoinLobby(_lobbyIdInput);
+                    AudioFeedback.PlayClick();
+                    ShowNotification($"⏳ Trete '{_lobbyIdInput.Trim()}' bei...");
                 }
 
                 if (DrawButton(new Rect(x + 14, y + 60, 100, 18), "← Zurück", _btnDarkStyle))
@@ -337,14 +349,15 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             {
                 // Active Lobby State (Large Hex-ID + Kopieren + Einladen)
                 float boxH = 44;
-                DrawBox(new Rect(x, y, w - 180, boxH), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+                DrawBox(new Rect(x, y, w - 180, boxH), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
                 GUI.Label(new Rect(x + 14, y + 10, w - 240, 24), string.IsNullOrEmpty(formattedCode) ? "· · · ·" : formattedCode, _lobbyCodeStyle);
                 GUI.Label(new Rect(x + w - 230, y + 14, 45, 16), "Hex-ID", _subtitleStyle);
 
                 string copyLabel = _copiedFeedback ? "✔ Kopiert" : "Kopieren";
                 if (DrawButton(new Rect(x + w - 172, y, 84, boxH), copyLabel, _btnTerracottaStyle))
                 {
-                    GUIUtility.systemCopyBuffer = string.IsNullOrEmpty(rawShort) ? formattedCode : rawShort;
+                    string toCopy = !string.IsNullOrEmpty(rawShort) ? rawShort : (SteamworksDetector.CurrentLobbyId != 0 ? SteamworksDetector.CurrentLobbyId.ToString() : formattedCode);
+                    GUIUtility.systemCopyBuffer = toCopy;
                     _copiedFeedback = true;
                     _copiedTimer = 1.8f;
                     AudioFeedback.PlaySuccess();
@@ -359,8 +372,9 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                     }
                     else
                     {
-                        GUIUtility.systemCopyBuffer = rawShort;
-                        ShowNotification($"✔ Code '{rawShort}' kopiert!");
+                        string toCopy = !string.IsNullOrEmpty(rawShort) ? rawShort : (SteamworksDetector.CurrentLobbyId != 0 ? SteamworksDetector.CurrentLobbyId.ToString() : formattedCode);
+                        GUIUtility.systemCopyBuffer = toCopy;
+                        ShowNotification($"✔ Code '{toCopy}' kopiert!");
                     }
                     AudioFeedback.PlayClick();
                 }
@@ -378,7 +392,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             }
 
             // Divider
-            DrawDivider(new Rect(x, y, w, 1), new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawDivider(new Rect(x, y, w, 1), new Color(0.820f, 0.800f, 0.765f, 1f));
             y += 12;
 
             // ── 2. BESATZUNG SECTION ────────────────────────────────────────────
@@ -411,7 +425,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (crewCount < maxSlots)
             {
                 int freeSlot = crewCount + 1;
-                DrawBox(new Rect(x, y, w, 36), _texCardDashed, new Color(0.153f, 0.153f, 0.165f, 0.8f));
+                DrawBox(new Rect(x, y, w, 36), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
                 GUI.Label(new Rect(x, y + 9, w, 18), $"Freier Platz an Rohr {freeSlot}", _emptySlotStyle);
                 y += 42;
             }
@@ -441,7 +455,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             GUI.Label(new Rect(x, y, w, 14), "EINSTELLUNGEN & TASTENBELEGUNG", _sectionHeaderStyle);
             y += 20;
 
-            DrawBox(new Rect(x, y, w, 192), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(x, y, w, 192), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
             float iy = y + 14;
 
             GUI.Label(new Rect(x + 14, iy, 180, 22), "Lobby-Overlay Hotkey:", _memberNameStyle);
@@ -483,7 +497,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static void DrawMemberCard(float x, float y, float w, string name, string initials, string rolePing, bool isHost)
         {
             float cardH = 40;
-            DrawBox(new Rect(x, y, w, cardH), _texCardBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(x, y, w, cardH), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
 
             // Initials Avatar Badge (26x26)
             DrawBox(new Rect(x + 8, y + 7, 26, 26), _texBadgeBg, new Color(0.247f, 0.247f, 0.275f, 1f));
@@ -497,7 +511,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         // ==================== FOOTER STATUS BAR ====================
         private static void DrawFooter(float wx, float wy, float ww)
         {
-            DrawBox(new Rect(wx, wy, ww, 34), _texFooterBg, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(wx, wy, ww, 34), _texFooterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
 
             bool online = SteamworksDetector.IsInLobby;
             Texture2D dotTex = online ? _texDotGreen : _texDotGrey;
@@ -507,7 +521,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             GUI.Label(new Rect(wx + 28, wy + 9, 85, 16), syncState, _footerTextStyle);
 
             // Vertical divider
-            DrawDivider(new Rect(wx + 118, wy + 11, 1, 12), new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawDivider(new Rect(wx + 118, wy + 11, 1, 12), new Color(0.820f, 0.800f, 0.765f, 1f));
 
             // Relay Label
             string relayLabel = online ? "Relay Steam P2P · 28 ms" : "Kein Relay";
@@ -517,7 +531,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             float barX = wx + 280;
             float barW = ww - 380;
             float barY = wy + 16;
-            DrawBox(new Rect(barX, barY, barW, 2), _texBorder, new Color(0.153f, 0.153f, 0.165f, 1f));
+            DrawBox(new Rect(barX, barY, barW, 2), _texBorder, new Color(0.820f, 0.800f, 0.765f, 1f));
             float fillW = _syncing ? barW * 0.5f : (online ? barW : 0f);
             if (fillW > 0)
             {
@@ -552,7 +566,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             else if (style == _btnDarkStyle)
             {
                 bgTex = hover ? _texButtonDarkHover : _texButtonDark;
-                borderColor = new Color(0.153f, 0.153f, 0.165f, 1f);
+                borderColor = new Color(0.820f, 0.800f, 0.765f, 1f);
             }
 
             DrawBox(rect, bgTex, borderColor);
@@ -624,6 +638,10 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             {
                 return $"{raw.Substring(0, 4)}-{raw.Substring(4, 4)}-{raw.Substring(8, 4)}";
             }
+            if (raw.Length == 8 && !raw.Contains("-"))
+            {
+                return $"{raw.Substring(0, 4)}-{raw.Substring(4, 4)}";
+            }
             return raw;
         }
 
@@ -657,26 +675,26 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         {
             if (_stylesInitialized && _texMasterBg != null) return;
 
-            // Template Color Tokens
-            var colorMasterBg = new Color(0.094f, 0.094f, 0.106f, 0.98f);     // #18181B Master Surface
-            var colorCardBg = new Color(0.122f, 0.118f, 0.114f, 1.0f);       // #1F1E1D Card Surface
-            var colorCardDashed = new Color(0.110f, 0.110f, 0.122f, 1.0f);   // #1C1C1F Empty/Dashed Card
-            var colorFooterBg = new Color(0.078f, 0.078f, 0.086f, 1.0f);     // #141416 Footer Surface
-            var colorTerracotta = new Color(0.851f, 0.467f, 0.341f, 1.0f);   // #D97757 Terracotta Accent
-            var colorTerracottaHover = new Color(0.800f, 0.471f, 0.361f, 1f); // #CC785C Hover Accent
-            var colorBadgeBg = new Color(0.153f, 0.153f, 0.165f, 1.0f);      // #27272A Badge Pill
-            var colorButtonDark = new Color(0.13f, 0.13f, 0.14f, 1.0f);
-            var colorButtonDarkHover = new Color(0.18f, 0.18f, 0.20f, 1.0f);
-            var colorBorder = new Color(0.153f, 0.153f, 0.165f, 1.0f);       // #27272A Border
-            var colorBorderLight = new Color(0.247f, 0.247f, 0.275f, 1.0f);  // #3F3F46 Border Light
-            var colorDotGreen = new Color(0.063f, 0.725f, 0.506f, 1.0f);     // #10B981 Green Dot
-            var colorDotGrey = new Color(0.322f, 0.322f, 0.357f, 1.0f);      // #52525B Grey Dot
+            // Helles Farbschema (Warmes technisches Papier / High-Contrast)
+            var colorMasterBg = new Color(0.965f, 0.960f, 0.948f, 1.0f);     // #F6F5F2 Heller Haupt-Hintergrund
+            var colorCardBg = new Color(1.0f, 1.0f, 1.0f, 1.0f);             // #FFFFFF Reine weiße Karten
+            var colorCardDashed = new Color(0.925f, 0.915f, 0.890f, 1.0f);   // #ECE9E3 Leere Slots
+            var colorFooterBg = new Color(0.910f, 0.898f, 0.875f, 1.0f);     // #E8E5DF Status-Footer
+            var colorTerracotta = new Color(0.851f, 0.353f, 0.200f, 1.0f);   // #D95A33 Kräftiges Terrakotta
+            var colorTerracottaHover = new Color(0.920f, 0.420f, 0.260f, 1f);// #EB6B42 Hover Terrakotta
+            var colorBadgeBg = new Color(0.890f, 0.875f, 0.840f, 1.0f);      // #E3DFD6 Initialen-Badge
+            var colorButtonDark = new Color(0.925f, 0.915f, 0.885f, 1.0f);   // #ECE9E2 Sekundär-Button
+            var colorButtonDarkHover = new Color(0.865f, 0.845f, 0.810f, 1.0f);// #DDD7CF Button-Hover
+            var colorBorder = new Color(0.820f, 0.800f, 0.765f, 1.0f);       // #D1CCC3 Rahmen
+            var colorBorderLight = new Color(0.880f, 0.865f, 0.835f, 1.0f);  // Hellerer Rahmen
+            var colorDotGreen = new Color(0.063f, 0.680f, 0.420f, 1.0f);     // #10AD6B Grüner Punkt
+            var colorDotGrey = new Color(0.600f, 0.590f, 0.570f, 1.0f);      // #999691 Grauer Punkt
 
-            var paperWhite = new Color(0.980f, 0.976f, 0.961f, 1.0f);       // #FAF9F5
-            var textSecondary = new Color(0.831f, 0.831f, 0.847f, 1.0f);    // #D4D4D8
-            var textMuted = new Color(0.443f, 0.443f, 0.478f, 1.0f);        // #71717A
-            var textSubtle = new Color(0.322f, 0.322f, 0.357f, 1.0f);       // #52525B
-            var darkButtonText = new Color(0.122f, 0.118f, 0.114f, 1.0f);   // #1F1E1D
+            var textPrimary = new Color(0.094f, 0.094f, 0.110f, 1.0f);       // #18181C Tiefes Dunkelgrau
+            var textSecondary = new Color(0.280f, 0.280f, 0.320f, 1.0f);     // #474752 Lesbares Mittelgrau
+            var textMuted = new Color(0.420f, 0.420f, 0.470f, 1.0f);         // #6B6B78 Dezentes Grau
+            var textSubtle = new Color(0.520f, 0.520f, 0.560f, 1.0f);        // #85858F
+            var buttonWhiteText = new Color(1.0f, 1.0f, 1.0f, 1.0f);         // Weißer Text auf Buttons
 
             _texMasterBg = MakeColorTexture(colorMasterBg);
             _texCardBg = MakeColorTexture(colorCardBg);
@@ -692,53 +710,61 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             _texDotGreen = MakeColorTexture(colorDotGreen);
             _texDotGrey = MakeColorTexture(colorDotGrey);
 
-            _titleStyle = new GUIStyle { fontSize = 13, alignment = TextAnchor.MiddleLeft };
-            _titleStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
+            _titleStyle = new GUIStyle { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _titleStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _subtitleStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
-            _subtitleStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
+            _subtitleStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _subtitleStyle.m_Normal = new GUIStyleState { textColor = colorTerracotta };
 
-            _sectionHeaderStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
-            _sectionHeaderStyle.m_Normal = new GUIStyleState { textColor = textMuted };
+            _sectionHeaderStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _sectionHeaderStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
-            _lobbyCodeStyle = new GUIStyle { fontSize = 15, alignment = TextAnchor.MiddleLeft };
-            _lobbyCodeStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
+            _lobbyCodeStyle = new GUIStyle { fontSize = 15, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _lobbyCodeStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
             _lobbySubtextStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleLeft };
-            _lobbySubtextStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
+            _lobbySubtextStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
-            _memberNameStyle = new GUIStyle { fontSize = 13, alignment = TextAnchor.MiddleLeft };
-            _memberNameStyle.m_Normal = new GUIStyleState { textColor = paperWhite };
+            _memberNameStyle = new GUIStyle { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _memberNameStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _memberRoleStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
+            _memberRoleStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
             _memberRoleStyle.m_Normal = new GUIStyleState { textColor = colorTerracotta };
 
-            _badgeInitialStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _badgeInitialStyle.m_Normal = new GUIStyleState { textColor = new Color(0.631f, 0.631f, 0.667f, 1f) };
+            _badgeInitialStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _badgeInitialStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _emptySlotStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _emptySlotStyle.m_Normal = new GUIStyleState { textColor = textSubtle };
+            _emptySlotStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _emptySlotStyle.m_Normal = new GUIStyleState { textColor = textMuted };
 
-            _statusPillStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleLeft };
-            _statusPillStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
+            _statusPillStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _statusPillStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _btnTerracottaStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _btnTerracottaStyle.m_Normal = new GUIStyleState { textColor = darkButtonText };
+            _btnTerracottaStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _btnTerracottaStyle.m_Normal = new GUIStyleState { textColor = buttonWhiteText };
 
-            _btnOutlineStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _btnOutlineStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
+            _btnOutlineStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _btnOutlineStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _btnDarkStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _btnDarkStyle.m_Normal = new GUIStyleState { textColor = textMuted };
+            _btnDarkStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _btnDarkStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
-            _footerTextStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleLeft };
-            _footerTextStyle.m_Normal = new GUIStyleState { textColor = new Color(0.631f, 0.631f, 0.667f, 1f) };
+            _footerTextStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _footerTextStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
-            _hotkeyStyle = new GUIStyle { fontSize = 10, alignment = TextAnchor.MiddleRight };
-            _hotkeyStyle.m_Normal = new GUIStyleState { textColor = new Color(0.247f, 0.247f, 0.275f, 1f) };
+            _hotkeyStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleRight };
+            _hotkeyStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
-            _notificationStyle = new GUIStyle { fontSize = 11, alignment = TextAnchor.MiddleCenter };
-            _notificationStyle.m_Normal = new GUIStyleState { textColor = darkButtonText };
+            _notificationStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _notificationStyle.m_Normal = new GUIStyleState { textColor = buttonWhiteText };
+
+            _inputFieldStyle = new GUIStyle
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft
+            };
+            _inputFieldStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
 
             _stylesInitialized = true;
         }

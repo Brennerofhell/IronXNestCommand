@@ -259,6 +259,18 @@ Während dieser Session wurde festgestellt, dass **zeitgleich eine zweite KI-Age
 
 ---
 
+### 3.17 🔧 Code-Review-Fixes: Missions-Doppelvergabe, Disk-I/O, tote Reflection-Lookups, Theme-Rest, Rückgabewert
+
+Per `/code-review` gegen die Änderungen der parallelen Session gefunden, hier gefixt (Scope-Verstoß der neuen Economy-Hooks bewusst NICHT gefixt — das ist ein Konflikt mit der anderen Session, kein Bug):
+
+- **Missions-Belohnung mehrfach vergeben**: `OnMissionCompleted_Postfix`/`OnMissionFailed_Postfix` hängen jetzt an `ShouldRun` statt am alten One-Shot-`Execute` — `ShouldRun` wird von Node-Graph-Zuständen typischerweise bei jeder Graph-Auswertung erneut abgefragt. Ohne Flankenerkennung hätte eine einzelne Missions-Fertigstellung XP/Währung mehrfach vergeben, solange `ShouldRun` weiter `true` liefert. Fix: `_missionCompletedFired`/`_missionFailedFired`-Flags, die nur beim Übergang `false→true` feuern und bei `false` zurückgesetzt werden.
+- **Synchroner Disk-Write pro Schuss**: `OnTriggerFire_Postfix` rief `SaveManager.SaveProgressionData` bei jedem `TriggerFire` auf — potenziell mehrfach pro Sekunde bei Dauerfeuer, Hitch-Risiko. Der Save-Aufruf entfernt; `ShellsFired` wird beim nächsten `AddXP`/`RecordMissionFinished` (dieselbe `Data`-Instanz) automatisch mitgespeichert.
+- **Tote Reflection-Lookups**: `PunchcardSpawner.Initialize()` versuchte zuerst `asm.GetType("Name, Assembly-CSharp")` — `Assembly.GetType` (Instanzmethode) parst anders als `Type.GetType` (statisch) keine `"Name, AssemblyName"`-Syntax, sucht stattdessen wörtlich nach einem Typnamen mit Komma und findet nie etwas. Toten ersten Versuch entfernt, nur die tatsächlich funktionierenden Klarname-Lookups behalten.
+- **Falscher Erfolgs-Rückgabewert**: `EnsureGuestFireMissionCard()`s letzter Fallback (weder Drucker noch reaktivierbare Karten gefunden) gab `true` zurück statt `false` — meldete Erfolg, obwohl nichts passiert ist. Zurück auf `false`.
+- **Unvollständige Theme-Migration**: Die parallele Session migrierte `CommandOverlay.cs` (beide Hosts) von dunkel auf ein helles „warm paper"-Theme (`#F6F5F2`/`#FFFFFF`/`#D1CCC3`), ließ dabei aber 3 Rahmenfarben je Host auf dem alten dunklen Wert (`#27272A`) stehen (Lobby-Platzhalterbox, leerer Besatzungs-Slot, Outline-Button-Rahmen in `DrawButton`) — sichtbarer dunkler Rahmen-Bruch auf hellem Hintergrund. Alle 3×2 Stellen auf `#D1CCC3` (`0.820, 0.800, 0.765`) vereinheitlicht.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:

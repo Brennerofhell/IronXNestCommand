@@ -25,12 +25,10 @@ namespace IronXNestCommand.Core
     {
         public static MissionTargetData CurrentMission { get; } = new();
 
-        private static Type _cardType;
         private static Type _printerType;
+        private static Type _cardType;
         private static Type _reqSlotType;
-        private static MethodInfo _printerApplyTarget;
-        private static MethodInfo _printerApplyPowder;
-        private static MethodInfo _cardApplyMethod;
+        private static MethodInfo _printMethod;
 
         private static bool _initialized = false;
         private static float _cacheTime = 0f;
@@ -45,26 +43,35 @@ namespace IronXNestCommand.Core
 
             try
             {
+                // Assembly.GetType (Instanzmethode) parst — anders als das statische Type.GetType —
+                // keine "Name, AssemblyName"-Syntax; ein solcher String wird als woertlicher
+                // Typname gesucht und findet nie etwas. Nur die tatsaechlich funktionierenden
+                // Klarname-Lookups behalten.
                 foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    _cardType ??= asm.GetType("FireMissionCard") ?? asm.GetType("PunchcardRuntime");
-                    _printerType ??= asm.GetType("FireMissionCardPrinter");
-                    _reqSlotType ??= asm.GetType("PunchcardSlot") ?? asm.GetType("SleepyNodes.RequisitionSlot");
-                }
+                    if (_printerType == null)
+                        _printerType = asm.GetType("FireMissionCardPrinter");
 
-                if (_cardType != null)
-                {
-                    _cardApplyMethod = _cardType.GetMethod("Apply", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (_cardType == null)
+                        _cardType = asm.GetType("WFireMissionCard")
+                                 ?? asm.GetType("FireMissionCard")
+                                 ?? asm.GetType("PunchcardRuntime");
+
+                    if (_reqSlotType == null)
+                        _reqSlotType = asm.GetType("WRequisitionSlot")
+                                    ?? asm.GetType("RequisitionSlot")
+                                    ?? asm.GetType("SleepyNodes.RequisitionSlot");
                 }
 
                 if (_printerType != null)
                 {
-                    _printerApplyTarget = _printerType.GetMethod("ApplyTargetTextureToCard", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                    _printerApplyPowder = _printerType.GetMethod("ApplyPowderChargeTextureToCard", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    _printMethod = _printerType.GetMethod("HandleCalculationSuccess", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                                ?? _printerType.GetMethod("PrintCard", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                                ?? _printerType.GetMethod("DispenseCard", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 }
 
                 _initialized = true;
-                MelonLogger.Msg("[PunchcardSpawner] Initialisiert.");
+                MelonLogger.Msg("[PunchcardSpawner] Initialisiert mit Objekt-Caching.");
             }
             catch (Exception ex)
             {
@@ -88,6 +95,21 @@ namespace IronXNestCommand.Core
             {
                 RefreshCacheIfNeeded();
 
+                // 1. Lokalen Drucker bedienen
+                if (_cachedPrinters != null && _cachedPrinters.Length > 0 && _printMethod != null)
+                {
+                    foreach (var printer in _cachedPrinters)
+                    {
+                        if (printer != null)
+                        {
+                            _printMethod.Invoke(printer, BuildPrintMethodArgs(_printMethod));
+                            MelonLogger.Msg("[PunchcardSpawner] ✔ Einsatz-Lochkarte über lokalen Drucker gedruckt.");
+                            return true;
+                        }
+                    }
+                }
+
+                // 2. Versteckte Karten reaktivieren
                 if (_cachedCards != null && _cachedCards.Length > 0)
                 {
                     foreach (var card in _cachedCards)
@@ -97,15 +119,20 @@ namespace IronXNestCommand.Core
                             if (!comp.gameObject.activeSelf)
                             {
                                 comp.gameObject.SetActive(true);
+                                MelonLogger.Msg($"[PunchcardSpawner] ✔ Versteckte Lochkarte [{comp.gameObject.name}] reaktiviert.");
                             }
                         }
                     }
                     return true;
                 }
+
+                // Weder Drucker noch reaktivierbare Karten gefunden — es ist tatsaechlich
+                // nichts passiert, das muss als Fehlschlag gemeldet werden, nicht als Erfolg.
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                MelonLogger.Warning($"[PunchcardSpawner] Fehler beim Spawnen der Einsatzkarte: {ex.Message}");
                 return false;
             }
         }
@@ -134,6 +161,25 @@ namespace IronXNestCommand.Core
             {
                 return false;
             }
+        }
+
+        private static object[] BuildPrintMethodArgs(MethodInfo method)
+        {
+            var parameters = method.GetParameters();
+            if (parameters.Length == 0) return null;
+
+            if (method.Name == "HandleCalculationSuccess" && parameters.Length == 4)
+            {
+                return new object[] { CurrentMission.Elevation, CurrentMission.Distance, CurrentMission.RecommendedCharges, false };
+            }
+
+            var args = new object[parameters.Length];
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                var pt = parameters[i].ParameterType;
+                args[i] = pt.IsValueType ? Activator.CreateInstance(pt) : null;
+            }
+            return args;
         }
 
         private static Il2CppSystem.Type GetIl2CppType(Type managedType)
