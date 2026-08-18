@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "IronXNestCommand"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "IronX Team"
 #define MyAppURL "https://github.com/Brennerofhell/IronXNestCommand"
 #define GameExe "Iron Nest Heavy Turret Simulator.exe"

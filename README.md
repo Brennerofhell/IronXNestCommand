@@ -12,7 +12,7 @@
 
 **IronXNestCommand** ist eine elegante, hochperformante **Co-op Multiplayer- & Besatzungs-Suite** für *Iron Nest: Heavy Turret Simulator*. Die Modifikation unterstützt **MelonLoader** (`Mods/`) sowie **BepInEx 6 IL2CPP** (`BepInEx/plugins/`) als saubere **Non-Standalone Mod** und integriert sich nahtlos in die offizielle Co-op Mod `IronNestCoop.Core.dll`.
 
-Das Interface wurde 1:1 nach der offiziellen **Anthropic / Dieselpunk Design-Vorlage** umgesetzt (520px Breite, `#18181B` Dark-Graphite, `#D97757` Terrakotta-Akzente, Steam-Lobby Box mit Hex-Code Kopierfunktion, Besatzungs-Initialen-Badges, prozedurale Audio-Bleeps und synchronisierte Statusleiste).
+Das Interface wurde 1:1 nach der offiziellen **Anthropic / Dieselpunk Design-Vorlage** umgesetzt (kompaktes 460px-Fenster im hellen „warmen Papier"-Theme, `#D95A33` Terrakotta-Akzente, Steam-Lobby Box mit Hex-Code Kopierfunktion, Besatzungs-Initialen-Badges und prozedurale Audio-Bleeps).
 
 ---
 
@@ -63,14 +63,15 @@ Das Skript baut das Projekt und installiert die DLLs automatisch an beiden Orten
 ### Option C: Release-Paket oder Installer .exe bauen
 Führe [`Package-Release.bat`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/Package-Release.bat) aus:
 - Baut die Solution im Release-Modus.
-- Erstellt ein fertiges, verteilbares Standalone-ZIP-Paket unter `dist/IronXNestCommand_v0.1.0.zip`.
-- Wenn [Inno Setup 6](https://jrsoftware.org/isdl.php) installiert ist, wird über [`tools/Installer.iss`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/tools/Installer.iss) automatisch eine eigenständige `IronXNestCommand_Setup_v0.1.0.exe` generiert.
+- Erstellt ein fertiges, verteilbares Standalone-ZIP-Paket unter `dist/IronXNestCommand_v0.1.1.zip`.
+- Wenn [Inno Setup 6](https://jrsoftware.org/isdl.php) installiert ist, wird über [`tools/Installer.iss`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/tools/Installer.iss) automatisch eine eigenständige `IronXNestCommand_Setup_v0.1.1.exe` generiert.
 
 ---
 
 ## ⌨️ Tastenbelegung & Steuerung
 
 - **`F8`**: Öffnet / Schließt das IronXNestCommand Menü (im Einstellungs-Tab frei auf F7 bis F12 umstellbar).
+- **`🏠`**: Springt aus jedem Tab sofort zurück zur Lobby-Übersicht (Header-Icon oder „🏠 ZU HOME"-Button im Einstellungen-Tab).
 - **`Kopieren`**: Kopiert den Lobby-Hex-Code in die Zwischenablage.
 - **`Einladen`**: Öffnet das native Steam-Einladungsfenster.
 - **`🔄 Besatzung re-syncen`**: Synchronisiert alle Lochkarten und Zieldaten sofort.

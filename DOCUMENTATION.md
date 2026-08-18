@@ -283,6 +283,21 @@ Auf Wunsch verkleinert und entschlackt (beide Hosts identisch):
 
 ---
 
+### 3.22 ⚠️ Betriebs-Lektion: GitHub-Release war 12 Commits veraltet, kein .exe-Asset vorhanden
+
+#### Problem-Analyse
+Auf Nachfrage geprüft: Der veröffentlichte GitHub-Release `v0.1.0` (Tag zeigte auf Commit `6a28759`, 2026-08-17) enthielt nur eine ZIP-Datei, **keine** `.exe`, und lag **12 Commits hinter `HEAD`** — sämtliche ModManagerGUI-Fixes (§3.13–§3.16), die Code-Review-Fixes (§3.17), die Overlay-Verkleinerung (§3.18) sowie die drei Fixes aus §3.19–§3.21 (F8/Lobby/Cursor, Coop-Panel-Unterdrückung, Steam-Einladung) fehlten im veröffentlichten Paket komplett. Zusätzlich existierte lokal bereits eine `dist/IronXNestCommand-Installer.exe`, die aber **vor** den letzten 3 Commits gebaut und nie hochgeladen worden war — Downloader von GitHub bekamen also durchgehend einen veralteten Stand, ohne dass das an anderer Stelle sichtbar gewesen wäre.
+
+#### Die Lösung
+- Version auf `0.1.1` angehoben (`IronXNestCommand.Core/ModInfo.cs`, `Directory.Build.props`, `tools/Installer.iss` — drei getrennte Stellen, da `Package-Release.ps1` den ZIP-Namen automatisch aus `ModInfo.cs` liest, der Inno-Setup-Installer seine Version aber separat aus `Installer.iss` bezieht).
+- **Inno Setup 6** erstmals installiert (`winget install JRSoftware.InnoSetup`) — landet per Winget-Default unter `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`, nicht unter `C:\Program Files`. `tools/Package-Release.ps1`s `$isccCandidates`-Liste kannte bisher nur klassische `Program Files`-Pfade und hätte das frisch installierte ISCC nie gefunden — Liste um den `%LOCALAPPDATA%\Programs`-Pfad ergänzt.
+- `tools/Package-Release.ps1` einmal komplett durchlaufen lassen: baut jetzt alle drei Distributionsformen konsistent aus demselben `HEAD`-Stand — `IronXNestCommand_v0.1.1.zip`, `IronXNestCommand-Installer.exe` (Standalone, eingebettete DLLs) und **neu** `IronXNestCommand_Setup_v0.1.1.exe` (richtiger Windows-Installer mit Deinstallations-Eintrag, Komponentenauswahl BepInEx/MelonLoader, automatischer Spielverzeichnis-Erkennung).
+- Neues Release `v0.1.1` auf GitHub veröffentlicht (`gh release create`), Tag zeigt auf den nach Doku-Update gepushten `HEAD` — alle drei Dateien als Assets angehängt.
+
+**Lehre**: Ein GitHub-Release ist ein eigener, vom lokalen Arbeitsstand komplett entkoppelter Veröffentlichungsschritt — „ist im Code gefixt" heißt nicht „ist im veröffentlichten Download". Bei größeren Fix-Serien (hier: 12 Commits über mehrere Sessions) lohnt sich vor dem nächsten Release ein expliziter Abgleich `git log <letzter-release-tag>..HEAD`, statt sich auf das Datum des letzten Release-Eintrags zu verlassen.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:
@@ -297,7 +312,49 @@ Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-V
 | **Besatzungs-Karten** | Initialen-Badge + Rolle | z. B. `[HM] Du (Operator)` · `👑 Kommandant · 28 ms` |
 | **Re-Sync Leiste** | Outline Button | `🔄 Besatzung re-syncen` + `Sync vor X s` |
 
-> Hinweis: Diese Tabelle beschreibt die urspüngliche Design-Vorlage; das tatsächliche Farbschema wurde seither auf ein helles "warmes Papier"-Theme migriert (siehe EnsureStyles() im Code für die aktuellen Hex-Werte) und in §3.18 um Fenstergröße/Footer verkleinert.
+> Hinweis: Diese Tabelle beschreibt die urspüngliche Design-Vorlage; das tatsächliche Farbschema wurde seither auf ein helles "warmes Papier"-Theme migriert (siehe EnsureStyles() im Code für die aktuellen Hex-Werte) und in §3.18 um Fenstergröße/Footer verkleinert. Seit §3.19 ersetzt ein `🏠`-Home-Icon im Header (linker Terracotta-Slot, wo zuvor nur ein statisches Deko-Icon saß) die alte Tab-Beschriftung „🌐 LOBBY & BESATZUNG" — Klick darauf springt aus dem Einstellungen-Tab zurück zur Lobby-Übersicht, ergänzt um einen zweiten „🏠 ZU HOME"-Button im Einstellungen-Footer.
+
+---
+
+### 3.19 🔑 F8 öffnete das Overlay unzuverlässig, Lobby-Erstellung schlug fehl, Cursor blieb nach dem Schließen gesperrt
+
+#### Problem-Analyse (Root Cause)
+Drei getrennte, aber gemeinsam gefixte Bugs (beide Hosts identisch):
+
+1. **F8-Erkennung unzuverlässig**: `CheckToggleKey()` verließ sich ausschließlich auf `Input.GetKeyDown(KeyCode.F8)` (Unitys Legacy-Input-System). Je nach Spielzustand (Cursor gesperrt fürs Zielen, ggf. aktives New-Input-System-Paket parallel zum Legacy-System) registrierte dieser Aufruf den Tastendruck nicht zuverlässig — das Overlay ließ sich dadurch gelegentlich gar nicht oder erst nach mehreren Versuchen öffnen.
+2. **Lobby-Erstellung erzeugte unsichtbare Lobbys**: Der generische Steamworks-Fallback-Pfad in `TryCreateLobby()` erzeugte den `ELobbyType` bisher aus dem festen Enum-Wert `3`. In `Steamworks.ELobbyType` ist `3` aber `k_ELobbyTypeInvisible` (unsichtbar/nicht beitretbar), nicht „Öffentlich" — Lobbys wurden dadurch technisch erstellt, waren für Freunde aber nie sichtbar oder beitretbar.
+3. **Cursor blieb nach dem Schließen gesperrt**: `SetVisible(false)` erzwang bisher immer `Cursor.lockState = Locked` / `Cursor.visible = false` beim Schließen — passend fürs Zielen im Turm, aber falsch, wenn der Nutzer das Overlay z. B. im Hangar oder Hauptmenü schloss: der Cursor blieb dort unsichtbar und unbeweglich „stecken", obwohl das Spiel selbst dort einen freien Mauszeiger erwartet.
+
+#### Die Lösung
+- **F8-Erkennung dreifach abgesichert**: `CheckToggleKey()` prüft jetzt zusätzlich per `GetAsyncKeyState` (`user32.dll`-P/Invoke) direkt den Hardware-Tastaturstatus — unabhängig von Unitys Input-System und damit immun gegen gesperrten Cursor oder ein parallel aktives New-Input-System. Zusätzlich fängt `OnGUI()` `EventType.KeyDown` für die konfigurierte Taste (und immer F8 als Hardcoded-Fallback) direkt im IMGUI-Event-Stream ab, bevor der übliche `!IsVisible`-Return greift.
+- **Lobby-Erstellung**: `ELobbyType`-Wert von `3` (Invisible) auf `2` (Public) korrigiert; `TryCreateLobby()` ruft bei noch nicht erkanntem IronNestCoop zusätzlich `ResolveTypes()` erneut auf (falls das Coop-Plugin erst nach dem eigenen `Initialize()` bereit wurde) und aktualisiert den Zustand sofort per `CheckSteamState()` statt auf den nächsten 2-Sekunden-Poll zu warten.
+- **Cursor-Verhalten**: `SetVisible()` gibt den Cursor beim Öffnen weiterhin frei (`None`/`visible = true`), erzwingt beim Schließen aber **kein** `Locked` mehr — der Cursor bleibt frei beweglich, bis das Spiel selbst (z. B. beim Zielen im Turm) wieder sperrt. Da der native Windows-Cursor dadurch nicht mehr zuverlässig sichtbar über dem Overlay lag, zeichnet `OnGUI()` zusätzlich einen synthetischen Cursor (`CreateCursorTexture()`, per-Pixel erzeugtes Pfeil-Bitmap) an `Event.current.mousePosition`, solange das Overlay offen ist.
+- **GUI Home-Navigation**: Neuer `🏠`-Icon-Button im Header (ersetzt das bisherige rein dekorative Terracotta-Icon) sowie ein `🏠 ZU HOME`-Button im Einstellungen-Tab-Footer springen beide direkt zurück zu Tab 0 (Lobby & Besatzung).
+- **Nebenbei mitgefixt**: `PunchcardSpawner.GetIl2CppType()` (beide Hosts) entfernte einen nie erfolgreichen `Il2CppSystem.Type.GetType(...)`-Fallback-Pfad und castet Aufrufer-seitig jetzt über `dynamic` statt über den entfernten `Il2CppSystem.Type`-Rückgabetyp; `TurretTelemetry.Initialize()`/`Update()` wird in `Main.cs` (MelonLoader) jetzt tatsächlich aus `OnInitializeMelon`/`OnUpdate` heraus aufgerufen.
+
+---
+
+### 3.20 🪟 Altes Standard-IronNestCoop-Panel überlagerte das eigene Overlay
+
+#### Problem-Analyse (Root Cause)
+Das per Soft-Dependency erkannte Basis-Plugin `IronNestCoop.Core.dll` zeichnet über `CoopRunner.DrawCoopPanel()`/`DrawOptionsPanel()` sein eigenes, funktional unvollständiges Standard-GUI-Panel oben links auf dem Bildschirm — unabhängig davon, ob `IronXNestCommand` sein eigenes `CommandOverlay` anzeigt. Für Nutzer beider Mods erschienen dadurch gleichzeitig zwei konkurrierende Lobby-Oberflächen.
+
+#### Die Lösung
+- Neue `ApplyCoopUIPatches(Harmony)` (beide Hosts) sucht `IronNestCoop.Core.CoopRunner` per Reflection über alle geladenen Assemblies (`AppDomain.CurrentDomain.GetAssemblies()` bzw. eine `FindTypeInAllAssemblies`-Hilfsmethode im MelonLoader-Host) und patcht `DrawCoopPanel`/`DrawOptionsPanel` mit einem gemeinsamen `SuppressDraw_Prefix()`, der immer `false` zurückgibt.
+- Ein Harmony-Prefix, der `false` liefert, überspringt die Original-Methode vollständig — das alte Panel wird dadurch nie mehr gezeichnet, ohne `IronNestCoop.Core.dll` selbst zu verändern oder eine harte Versionsabhängigkeit einzugehen (bricht sauber weg, falls die Zielmethoden in einer künftigen Coop-Plugin-Version umbenannt werden).
+
+---
+
+### 3.21 📨 Steam-Freundeseinladung („Einladen") reagierte nicht
+
+#### Problem-Analyse (Root Cause)
+`TryOpenInviteOverlay()` brach bisher sofort ab, wenn entweder die generische Steamworks.NET-Reflection (`IsSteamAvailable`) nicht verfügbar war **oder** das mod-eigene `CurrentLobbyId` noch `0` war. Läuft die Lobby ausschließlich über den `IronNestCoop`-Soft-Dependency-Pfad (`SteamNet`), kann `CurrentLobbyId` hinter dem tatsächlichen Coop-Plugin-Zustand zurückliegen oder die generische Steamworks-Reflection schlicht nie aufgelöst worden sein — der „Einladen"-Button tat dadurch in diesem (dem normalen) Fall nichts.
+
+#### Die Lösung
+- `TryOpenInviteOverlay()` erzwingt bei `CurrentLobbyId == 0` zunächst ein `CheckSteamState()`-Refresh und liest bei weiterhin `0` die Lobby-ID notfalls direkt aus `SteamNet`s eigener `_coopCurrentLobbyId`-Reflection-Property.
+- **Neuer primärer Pfad**: Löst `SteamNet`s privates `_pipe`-Feld (die `SteamPipe`-Instanz des Coop-Plugins) per Reflection auf und ruft dessen `ActivateInviteDialog(ulong)` direkt auf — der native, vom Coop-Plugin selbst verwendete Einladungsmechanismus, unabhängig davon, ob generische Steamworks.NET-Typen im Spiel überhaupt auflösbar sind.
+- Schlägt das fehl (oder ist `SteamPipe` nicht vorhanden), fällt der Code wie zuvor auf `Steamworks.SteamFriends.ActivateGameOverlayInviteDialog(CSteamID)` per generischer Reflection zurück.
+- Scheitern beide Pfade, bleibt der bereits vorhandene „Kopieren"-Button (Hex-Lobby-ID in die Zwischenablage) als manueller Fallback zum Teilen der Lobby erhalten.
 
 ---
 
@@ -314,6 +371,7 @@ Das Skript kompiliert alle Projekte und installiert die DLLs automatisch an beid
 ## 6. Tastenkombinationen & Steuerung
 
 - **`F8`**: Öffnet / Schließt das IronXNestCommand Overlay (Hotkey im Menü frei belegbar: F7 bis F12).
+- **`🏠`**: Header-Icon bzw. „🏠 ZU HOME"-Button im Einstellungen-Tab — springt aus jedem Tab zurück zur Lobby-Übersicht (§3.19).
 - **`Kopieren`**: Kopiert die 12-stellige Hex-Lobby-ID direkt in die Zwischenablage.
 - **`Einladen`**: Öffnet das native Steam-Overlay zur Freundeseinladung.
 - **`🔄 Besatzung re-syncen`**: Erzwingt sofortigen Lochkarten- und Zieldatenabgleich auf allen Gast-Cockpits.
