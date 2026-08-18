@@ -219,6 +219,9 @@ function New-FooterBtn ($text, $w, $color, $fgColor, $font) {
     $b.Font                      = $font
     $b.BackColor                 = $color
     $b.ForeColor                 = $fgColor
+    $b.UseVisualStyleBackColor   = $false
+    $b.TextAlign                 = "MiddleCenter"
+    $b.AutoSize                  = $false
     $b.FlatStyle                 = "Flat"
     $b.FlatAppearance.BorderSize = 0
     $b.Size                      = New-Object System.Drawing.Size($w, 32)
