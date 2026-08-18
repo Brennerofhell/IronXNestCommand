@@ -224,6 +224,19 @@ Als Heavy-Turret-Simulator sperrt und versteckt das Spiel den System-Cursor wäh
 
 ---
 
+### 3.14 🧰 ModManagerGUI.ps1: Lösch-Button verschwand bei maximiertem Fenster
+
+#### Problem-Analyse (Root Cause)
+Der Deinstallations-Tab positionierte alle Controls über manuelle `Location`+`Anchor`-Pixelwerte, ausgelegt für die Standardfenstergröße (700×640). Bei einem maximierten Fenster (z. B. 2560×1440) wuchs das äußere `TabControl` korrekt über `Anchor`, aber die Kette der ineinander verschachtelten Panels darunter (Pfad-Leiste, Liste, Status, Button-Leiste) berechnete ihre Positionen teils noch relativ zu veralteten/falschen Elterngrößen. Konkret verschwand der „Ausgewählte Mods löschen"-Button vollständig — auch wild gescrollt oder das Fenster verkleinert brachte ihn nicht zurück, er wurde schlicht nicht mehr gezeichnet.
+
+#### Die Lösung
+- Kompletter Umbau von Tab 1 (Deinstallation) auf `Dock`-Layout statt manueller `Anchor`+`Location`-Pixelrechnung: Pfad-Leiste `Dock="Top"`, Liste `Dock="Fill"` (füllt automatisch den kompletten verbleibenden Platz zwischen Kopf- und Fußleiste, bei jeder Fenstergröße), Status+Buttons in einem eigenen `Dock="Bottom"`-Footer-Panel mit fester Höhe.
+- Die Button-Reihe selbst nutzt jetzt ein `FlowLayoutPanel` statt eines Panels mit `Anchor="Top,Right"` für den Lösch-Button — letzteres berechnete seine rechte Marge offenbar anhand einer zum Berechnungszeitpunkt noch nicht final aufgelösten Elternbreite und der Button verschwand dadurch komplett aus dem sichtbaren Bereich. `FlowLayoutPanel` ordnet Buttons selbst links-nach-rechts an, unabhängig von der Fensterbreite.
+- Per Screenshot-Test bei maximiertem Fenster verifiziert: alle drei Buttons (Neu scannen, Ordner öffnen, Ausgewählte Mods löschen) sind jetzt sichtbar.
+- `$form.MinimumSize` außerdem von `640×540` auf `640×640` erhöht, da `540` kleiner war als die tatsächlich benötigte Höhe für Tab-Inhalt + Button-Leiste (~574px + Fensterrahmen).
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:

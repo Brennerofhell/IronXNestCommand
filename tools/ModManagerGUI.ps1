@@ -129,11 +129,22 @@ $tabUninstall.ForeColor = $cText
 $tabControl.TabPages.Add($tabUninstall)
 
 # Pfad-Panel
+# Dock statt Anchor+Location: Anchor-basierte Pixel-Positionierung war fuer den regulaeren
+# Fenstergroessen-Bereich ausgelegt und schnitt beim Maximieren des Fensters die Buttons am
+# unteren Rand ab (die Anker-Deltas passen nicht mehr, wenn das Fenster VIEL groesser wird als
+# im Design). Dock berechnet die Position bei jeder Groesse automatisch korrekt.
 $pathPanel = New-Object System.Windows.Forms.Panel
-$pathPanel.Location  = New-Object System.Drawing.Point(8, 10)
-$pathPanel.Size      = New-Object System.Drawing.Size(636, 34)
-$pathPanel.BackColor = $cCard
-$pathPanel.Anchor    = "Top,Left,Right"
+$pathPanel.Height    = 44
+$pathPanel.BackColor = $cBg
+$pathPanel.Dock      = "Top"
+
+# Innerer Karten-Streifen (behaelt das urspruengliche Card-Aussehen bei fester Hoehe bei)
+$pathCard = New-Object System.Windows.Forms.Panel
+$pathCard.Location  = New-Object System.Drawing.Point(8, 8)
+$pathCard.Size      = New-Object System.Drawing.Size(636, 34)
+$pathCard.BackColor = $cCard
+$pathCard.Anchor    = "Top,Left,Right"
+$pathPanel.Controls.Add($pathCard)
 
 $lblPath = New-Object System.Windows.Forms.Label
 $lblPath.Text      = "Spielordner:"
@@ -141,7 +152,7 @@ $lblPath.Font      = $fontBold
 $lblPath.ForeColor = $cText
 $lblPath.Location  = New-Object System.Drawing.Point(8, 7)
 $lblPath.AutoSize  = $true
-$pathPanel.Controls.Add($lblPath)
+$pathCard.Controls.Add($lblPath)
 
 $txtPath = New-Object System.Windows.Forms.TextBox
 $txtPath.Text        = $script:currentGamePath
@@ -152,7 +163,7 @@ $txtPath.BorderStyle = "FixedSingle"
 $txtPath.Location    = New-Object System.Drawing.Point(92, 6)
 $txtPath.Size        = New-Object System.Drawing.Size(420, 22)
 $txtPath.Anchor      = "Top,Left,Right"
-$pathPanel.Controls.Add($txtPath)
+$pathCard.Controls.Add($txtPath)
 
 $btnBrowse = New-Object System.Windows.Forms.Button
 $btnBrowse.Text                        = "Durchsuchen..."
@@ -173,66 +184,53 @@ $btnBrowse.Add_Click({
         Refresh-ModList
     }
 })
-$pathPanel.Controls.Add($btnBrowse)
-$tabUninstall.Controls.Add($pathPanel)
+$pathCard.Controls.Add($btnBrowse)
 
-# ListView
-$listView = New-Object System.Windows.Forms.ListView
-$listView.Location    = New-Object System.Drawing.Point(8, 52)
-$listView.Size        = New-Object System.Drawing.Size(636, 340)
-$listView.View        = "Details"
-$listView.CheckBoxes  = $true
-$listView.FullRowSelect = $true
-$listView.GridLines   = $true
-$listView.BackColor   = $cCard
-$listView.ForeColor   = $cText
-$listView.Font        = $fontNormal
-$listView.BorderStyle = "FixedSingle"
-$listView.Anchor      = "Top,Bottom,Left,Right"
-
-$listView.Columns.Add("Mod / Datei",   240) | Out-Null
-$listView.Columns.Add("Typ",           110) | Out-Null
-$listView.Columns.Add("Groesse",        80) | Out-Null
-$listView.Columns.Add("Relativer Pfad",185) | Out-Null
-$tabUninstall.Controls.Add($listView)
+# Footer (Status + Buttons) — eigenes Dock="Bottom"-Panel mit fester Hoehe, damit die Lösch-
+# Buttons garantiert sichtbar bleiben, unabhaengig von der tatsaechlichen Fenstergroesse.
+$uFooterPanel = New-Object System.Windows.Forms.Panel
+$uFooterPanel.Height  = 78
+$uFooterPanel.Dock    = "Bottom"
 
 # Status
 $statusStrip = New-Object System.Windows.Forms.Label
-$statusStrip.Location  = New-Object System.Drawing.Point(8, 398)
-$statusStrip.Size      = New-Object System.Drawing.Size(636, 20)
+$statusStrip.Height    = 26
+$statusStrip.Padding   = New-Object System.Windows.Forms.Padding(8, 6, 8, 0)
 $statusStrip.Font      = $fontNormal
 $statusStrip.ForeColor = $cMuted
 $statusStrip.Text      = "Bereit zum Scannen."
-$statusStrip.Anchor    = "Bottom,Left,Right"
-$tabUninstall.Controls.Add($statusStrip)
+$statusStrip.Dock      = "Top"
+$uFooterPanel.Controls.Add($statusStrip)
 
-# Buttons unten (Deinstall-Tab)
-$uBtnPanel = New-Object System.Windows.Forms.Panel
-$uBtnPanel.Location = New-Object System.Drawing.Point(8, 424)
-$uBtnPanel.Size     = New-Object System.Drawing.Size(636, 44)
-$uBtnPanel.Anchor   = "Bottom,Left,Right"
+# Buttons unten (Deinstall-Tab) — FlowLayoutPanel statt Anchor="Top,Right": ordnet Buttons
+# selbst nebeneinander an, unabhaengig von der tatsaechlichen Fensterbreite. Die vorherige
+# Anchor-basierte Rechtsausrichtung von btnDelete berechnete ihre Marge offenbar anhand einer
+# veralteten/falschen Breite des (selbst schon dynamisch groesse aendernden) Eltern-Panels und
+# der Button verschwand dadurch komplett aus dem sichtbaren Bereich.
+$uBtnPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+$uBtnPanel.Dock          = "Fill"
+$uBtnPanel.FlowDirection = "LeftToRight"
+$uBtnPanel.WrapContents  = $false
+$uBtnPanel.Padding       = New-Object System.Windows.Forms.Padding(8, 4, 8, 8)
 
-$btnRefresh = New-Object System.Windows.Forms.Button
-$btnRefresh.Text                      = "Neu scannen"
-$btnRefresh.Font                      = $fontBold
-$btnRefresh.BackColor                 = $cBorder
-$btnRefresh.ForeColor                 = $cText
-$btnRefresh.FlatStyle                 = "Flat"
-$btnRefresh.FlatAppearance.BorderSize = 0
-$btnRefresh.Location                  = New-Object System.Drawing.Point(0, 5)
-$btnRefresh.Size                      = New-Object System.Drawing.Size(120, 32)
+function New-FooterBtn ($text, $w, $color, $fgColor, $font) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.Text                      = $text
+    $b.Font                      = $font
+    $b.BackColor                 = $color
+    $b.ForeColor                 = $fgColor
+    $b.FlatStyle                 = "Flat"
+    $b.FlatAppearance.BorderSize = 0
+    $b.Size                      = New-Object System.Drawing.Size($w, 32)
+    $b.Margin                    = New-Object System.Windows.Forms.Padding(0, 0, 8, 0)
+    return $b
+}
+
+$btnRefresh = New-FooterBtn "Neu scannen" 120 $cBorder $cText $fontBold
 $btnRefresh.Add_Click({ Refresh-ModList })
 $uBtnPanel.Controls.Add($btnRefresh)
 
-$btnOpenFolder = New-Object System.Windows.Forms.Button
-$btnOpenFolder.Text                      = "Ordner oeffnen"
-$btnOpenFolder.Font                      = $fontNormal
-$btnOpenFolder.BackColor                 = $cBorder
-$btnOpenFolder.ForeColor                 = $cText
-$btnOpenFolder.FlatStyle                 = "Flat"
-$btnOpenFolder.FlatAppearance.BorderSize = 0
-$btnOpenFolder.Location                  = New-Object System.Drawing.Point(128, 5)
-$btnOpenFolder.Size                      = New-Object System.Drawing.Size(128, 32)
+$btnOpenFolder = New-FooterBtn "Ordner oeffnen" 128 $cBorder $cText $fontNormal
 $btnOpenFolder.Add_Click({
     if (Test-Path $script:currentGamePath) {
         Invoke-Item $script:currentGamePath
@@ -242,19 +240,33 @@ $btnOpenFolder.Add_Click({
 })
 $uBtnPanel.Controls.Add($btnOpenFolder)
 
-$btnDelete = New-Object System.Windows.Forms.Button
-$btnDelete.Text                      = "Ausgewaehlte Mods loeschen"
-$btnDelete.Font                      = $fontBold
-$btnDelete.BackColor                 = $cTerracotta
-$btnDelete.ForeColor                 = [System.Drawing.Color]::White
-$btnDelete.FlatStyle                 = "Flat"
-$btnDelete.FlatAppearance.BorderSize = 0
-$btnDelete.Location                  = New-Object System.Drawing.Point(340, 5)
-$btnDelete.Size                      = New-Object System.Drawing.Size(296, 32)
-$btnDelete.Anchor                    = "Top,Right"
+$btnDelete = New-FooterBtn "Ausgewaehlte Mods loeschen" 296 $cTerracotta ([System.Drawing.Color]::White) $fontBold
 $btnDelete.Add_Click({ Delete-SelectedMods })
 $uBtnPanel.Controls.Add($btnDelete)
-$tabUninstall.Controls.Add($uBtnPanel)
+$uFooterPanel.Controls.Add($uBtnPanel)
+
+# ListView — Dock="Fill" nimmt automatisch den gesamten Platz zwischen pathPanel (Top) und
+# uFooterPanel (Bottom) ein, bei jeder Fenstergroesse. Reihenfolge wichtig: Top/Bottom-Docks
+# zuerst hinzufuegen, Fill-Control zuletzt.
+$listView = New-Object System.Windows.Forms.ListView
+$listView.View        = "Details"
+$listView.CheckBoxes  = $true
+$listView.FullRowSelect = $true
+$listView.GridLines   = $true
+$listView.BackColor   = $cCard
+$listView.ForeColor   = $cText
+$listView.Font        = $fontNormal
+$listView.BorderStyle = "FixedSingle"
+$listView.Dock        = "Fill"
+
+$listView.Columns.Add("Mod / Datei",   240) | Out-Null
+$listView.Columns.Add("Typ",           110) | Out-Null
+$listView.Columns.Add("Groesse",        80) | Out-Null
+$listView.Columns.Add("Relativer Pfad",185) | Out-Null
+
+$tabUninstall.Controls.Add($pathPanel)
+$tabUninstall.Controls.Add($uFooterPanel)
+$tabUninstall.Controls.Add($listView)
 
 # ==========================================
 # TAB 2: BUILD & DEPLOY
