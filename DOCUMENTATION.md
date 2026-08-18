@@ -271,20 +271,33 @@ Per `/code-review` gegen die Änderungen der parallelen Session gefunden, hier g
 
 ---
 
+### 3.18 📐 Overlay abgespeckt: kleineres Fenster, weniger Elemente
+
+Auf Wunsch verkleinert und entschlackt (beide Hosts identisch):
+
+- **Fenstergröße**: `520×480` → `460×420` px (Breite −11,5 %, Höhe −12,5 %).
+- **Header-Subtitle entfernt**: die Zeile „LOBBY & BESATZUNG" unter dem Titel war redundant — dieselbe Information steht bereits auf den beiden Tab-Buttons direkt darunter. Titel-Label vertikal neu zentriert.
+- **Footer-Statusleiste komplett entfernt**: Die unterste 34px-Leiste (Sync-Status, Relay-Label, Mini-Fortschrittsbalken, Sync-Zeitstempel) duplizierte Informationen, die bereits kompakter in der Status-Pille im Header sichtbar sind (`Lobby offen`/`Keine Lobby`). Dabei auch die dadurch verwaisten Felder/Styles bereinigt (`_texFooterBg`, `_texBorder` [BepInEx], `_footerTextStyle`, zugehörige Farbvariablen) statt sie als toten Code stehen zu lassen.
+- Die Notification-Banner-Position wurde an den Wegfall der Footer-Leiste angepasst (`wy + wh - 34` statt `- 64`).
+- Alle übrigen Inhalte (Lobby-Erstellung/Beitritt, Besatzungsliste, Re-Sync-Button, Einstellungen-Tab) sind unverändert erhalten — die Kürzung betraf ausschließlich redundante/duplizierte Anzeigen, keine Funktionalität.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:
 
 | Element | Farbwert / Token | Funktion |
 | :--- | :--- | :--- |
-| **Master Container** | `#18181B` (98% Opazität) | 520px breites Hauptfenster mit 1px `#27272A` Rand |
-| **Terracotta Accent** | `#D97757` (Hover: `#CC785C`) | Primär-Aktionen (Kopieren, Erstellen, Speichern, Tabs) |
-| **Card Surface** | `#1F1E1D` / `#27272A` | Hex-Code Box, Besatzungs-Karten, Avatar-Badges |
-| **Dashed Empty Slot** | `#1C1C1F` mit Rahmen | Platzhalter `Freier Platz an Rohr X` |
-| **Status Pill** | `#1F1E1D` mit `#10B981` Dot | Anzeige `Lobby offen` / `Keine Lobby` oben rechts |
+| **Master Container** | Heller Hintergrund (siehe §3.18) | 460px breites Hauptfenster (abgespeckt von 520px), kein Footer mehr |
+| **Terracotta Accent** | `#D95A33` (Hover: `#EB6B42`) | Primär-Aktionen (Kopieren, Erstellen, Speichern, Tabs) |
+| **Card Surface** | Weiß / helles Beige | Hex-Code Box, Besatzungs-Karten, Avatar-Badges |
+| **Dashed Empty Slot** | Helles Beige mit Rahmen | Platzhalter `Freier Platz an Rohr X` |
+| **Status Pill** | Weiß mit `#10AD6B` Dot | Anzeige `Lobby offen` / `Keine Lobby` oben rechts (einzige Statusanzeige, kein Footer mehr) |
 | **Besatzungs-Karten** | Initialen-Badge + Rolle | z. B. `[HM] Du (Operator)` · `👑 Kommandant · 28 ms` |
 | **Re-Sync Leiste** | Outline Button | `🔄 Besatzung re-syncen` + `Sync vor X s` |
-| **Footer Status Bar** | `#141416` (34px) | Status-Dot, `Relay Steam P2P`, 2px Ladebalken, Timestamp |
+
+> Hinweis: Diese Tabelle beschreibt die urspüngliche Design-Vorlage; das tatsächliche Farbschema wurde seither auf ein helles "warmes Papier"-Theme migriert (siehe EnsureStyles() im Code für die aktuellen Hex-Werte) und in §3.18 um Fenstergröße/Footer verkleinert.
 
 ---
 

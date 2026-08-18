@@ -20,8 +20,8 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         public static bool IsVisible { get; set; } = true;
         public static ModConfig Config { get; set; } = new();
 
-        // ── Window Layout (520px Breite gemäß Vorlage) ─────────────────────────
-        private static Rect _windowRect = new(60, 60, 520, 480);
+        // ── Window Layout (kompakte Groesse — abgespeckt gegenueber der 520x480 Vorlage) ──
+        private static Rect _windowRect = new(60, 60, 460, 420);
         private static bool _isDragging = false;
         private static Vector2 _dragOffset = Vector2.zero;
 
@@ -47,13 +47,11 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static Texture2D _texMasterBg;
         private static Texture2D _texCardBg;
         private static Texture2D _texCardDashed;
-        private static Texture2D _texFooterBg;
         private static Texture2D _texTerracotta;
         private static Texture2D _texTerracottaHover;
         private static Texture2D _texBadgeBg;
         private static Texture2D _texButtonDark;
         private static Texture2D _texButtonDarkHover;
-        private static Texture2D _texBorder;
         private static Texture2D _texBorderLight;
         private static Texture2D _texDotGreen;
         private static Texture2D _texDotGrey;
@@ -72,7 +70,6 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static GUIStyle _btnTerracottaStyle;
         private static GUIStyle _btnOutlineStyle;
         private static GUIStyle _btnDarkStyle;
-        private static GUIStyle _footerTextStyle;
         private static GUIStyle _hotkeyStyle;
         private static GUIStyle _notificationStyle;
         private static GUIStyle _inputFieldStyle;
@@ -213,13 +210,10 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             {
                 float bannerW = 380;
                 float bannerX = wx + (ww - bannerW) / 2f;
-                float bannerY = wy + wh - 64;
+                float bannerY = wy + wh - 34;
                 DrawBox(new Rect(bannerX, bannerY, bannerW, 26), _texTerracotta, Color.white);
                 GUI.Label(new Rect(bannerX + 10, bannerY + 4, bannerW - 20, 18), _notificationText, _notificationStyle);
             }
-
-            // 6. Footer Status Bar
-            DrawFooter(wx, wy + wh - 34, ww);
         }
 
         // ==================== HEADER BAR ====================
@@ -229,9 +223,8 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             DrawBox(new Rect(wx + 18, wy + 12, 26, 26), _texTerracotta, new Color(0.851f, 0.467f, 0.341f, 1f));
             DrawBox(new Rect(wx + 25, wy + 19, 12, 12), _texMasterBg, new Color(0.094f, 0.094f, 0.106f, 1f));
 
-            // Title & Subtitle
-            GUI.Label(new Rect(wx + 52, wy + 10, 200, 18), "IronXNestCommand", _titleStyle);
-            GUI.Label(new Rect(wx + 52, wy + 26, 200, 14), "LOBBY & BESATZUNG", _subtitleStyle);
+            // Title (Subtitle entfernt — redundant mit den Tab-Labels direkt darunter)
+            GUI.Label(new Rect(wx + 52, wy + 15, 200, 18), "IronXNestCommand", _titleStyle);
 
             bool online = SteamworksDetector.IsInLobby;
 
@@ -508,42 +501,6 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             GUI.Label(new Rect(x + 42, y + 20, w - 50, 16), rolePing, isHost ? _memberRoleStyle : _subtitleStyle);
         }
 
-        // ==================== FOOTER STATUS BAR ====================
-        private static void DrawFooter(float wx, float wy, float ww)
-        {
-            DrawBox(new Rect(wx, wy, ww, 34), _texFooterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
-
-            bool online = SteamworksDetector.IsInLobby;
-            Texture2D dotTex = online ? _texDotGreen : _texDotGrey;
-            GUI.DrawTexture(new Rect(wx + 18, wy + 14, 5, 5), dotTex);
-
-            string syncState = _syncing ? "SYNC LÄUFT" : (online ? "SYNCHRON" : "IM LEERLAUF");
-            GUI.Label(new Rect(wx + 28, wy + 9, 85, 16), syncState, _footerTextStyle);
-
-            // Vertical divider
-            DrawDivider(new Rect(wx + 118, wy + 11, 1, 12), new Color(0.820f, 0.800f, 0.765f, 1f));
-
-            // Relay Label
-            string relayLabel = online ? "Relay Steam P2P · 28 ms" : "Kein Relay";
-            GUI.Label(new Rect(wx + 128, wy + 9, 150, 16), relayLabel, _subtitleStyle);
-
-            // Mini Progress Bar (2px height)
-            float barX = wx + 280;
-            float barW = ww - 380;
-            float barY = wy + 16;
-            DrawBox(new Rect(barX, barY, barW, 2), _texBorder, new Color(0.820f, 0.800f, 0.765f, 1f));
-            float fillW = _syncing ? barW * 0.5f : (online ? barW : 0f);
-            if (fillW > 0)
-            {
-                GUI.DrawTexture(new Rect(barX, barY, fillW, 2), _texTerracotta);
-            }
-
-            // Sync stamp
-            float secondsAgo = _lastSyncTime > 0 ? (Time.unscaledTime - _lastSyncTime) : 4f;
-            string stamp = _syncing ? "…" : $"Sync {Mathf.Max(1, (int)secondsAgo)}s";
-            GUI.Label(new Rect(wx + ww - 95, wy + 9, 85, 16), stamp, _hotkeyStyle);
-        }
-
         // ==================== COMPONENT HELPERS ====================
         private static bool DrawButton(Rect rect, string label, GUIStyle style)
         {
@@ -679,13 +636,11 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             var colorMasterBg = new Color(0.965f, 0.960f, 0.948f, 1.0f);     // #F6F5F2 Heller Haupt-Hintergrund
             var colorCardBg = new Color(1.0f, 1.0f, 1.0f, 1.0f);             // #FFFFFF Reine weiße Karten
             var colorCardDashed = new Color(0.925f, 0.915f, 0.890f, 1.0f);   // #ECE9E3 Leere Slots
-            var colorFooterBg = new Color(0.910f, 0.898f, 0.875f, 1.0f);     // #E8E5DF Status-Footer
             var colorTerracotta = new Color(0.851f, 0.353f, 0.200f, 1.0f);   // #D95A33 Kräftiges Terrakotta
             var colorTerracottaHover = new Color(0.920f, 0.420f, 0.260f, 1f);// #EB6B42 Hover Terrakotta
             var colorBadgeBg = new Color(0.890f, 0.875f, 0.840f, 1.0f);      // #E3DFD6 Initialen-Badge
             var colorButtonDark = new Color(0.925f, 0.915f, 0.885f, 1.0f);   // #ECE9E2 Sekundär-Button
             var colorButtonDarkHover = new Color(0.865f, 0.845f, 0.810f, 1.0f);// #DDD7CF Button-Hover
-            var colorBorder = new Color(0.820f, 0.800f, 0.765f, 1.0f);       // #D1CCC3 Rahmen
             var colorBorderLight = new Color(0.880f, 0.865f, 0.835f, 1.0f);  // Hellerer Rahmen
             var colorDotGreen = new Color(0.063f, 0.680f, 0.420f, 1.0f);     // #10AD6B Grüner Punkt
             var colorDotGrey = new Color(0.600f, 0.590f, 0.570f, 1.0f);      // #999691 Grauer Punkt
@@ -699,13 +654,11 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             _texMasterBg = MakeColorTexture(colorMasterBg);
             _texCardBg = MakeColorTexture(colorCardBg);
             _texCardDashed = MakeColorTexture(colorCardDashed);
-            _texFooterBg = MakeColorTexture(colorFooterBg);
             _texTerracotta = MakeColorTexture(colorTerracotta);
             _texTerracottaHover = MakeColorTexture(colorTerracottaHover);
             _texBadgeBg = MakeColorTexture(colorBadgeBg);
             _texButtonDark = MakeColorTexture(colorButtonDark);
             _texButtonDarkHover = MakeColorTexture(colorButtonDarkHover);
-            _texBorder = MakeColorTexture(colorBorder);
             _texBorderLight = MakeColorTexture(colorBorderLight);
             _texDotGreen = MakeColorTexture(colorDotGreen);
             _texDotGrey = MakeColorTexture(colorDotGrey);
@@ -749,9 +702,6 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             _btnDarkStyle = new GUIStyle { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             _btnDarkStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
-            _footerTextStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-            _footerTextStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
-
             _hotkeyStyle = new GUIStyle { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleRight };
             _hotkeyStyle.m_Normal = new GUIStyleState { textColor = textSecondary };
 
@@ -787,13 +737,11 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (_texMasterBg != null) Destroy(_texMasterBg);
             if (_texCardBg != null) Destroy(_texCardBg);
             if (_texCardDashed != null) Destroy(_texCardDashed);
-            if (_texFooterBg != null) Destroy(_texFooterBg);
             if (_texTerracotta != null) Destroy(_texTerracotta);
             if (_texTerracottaHover != null) Destroy(_texTerracottaHover);
             if (_texBadgeBg != null) Destroy(_texBadgeBg);
             if (_texButtonDark != null) Destroy(_texButtonDark);
             if (_texButtonDarkHover != null) Destroy(_texButtonDarkHover);
-            if (_texBorder != null) Destroy(_texBorder);
             if (_texBorderLight != null) Destroy(_texBorderLight);
             if (_texDotGreen != null) Destroy(_texDotGreen);
             if (_texDotGrey != null) Destroy(_texDotGrey);
