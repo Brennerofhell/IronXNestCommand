@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using IronXNestCommand.Core.Logging;
 using IronXNestCommand.Host.BepInEx.Core;
 
@@ -289,7 +290,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
             if (!IsSteamAvailable)
             {
-                LastStatusMessage = "Steam nicht verfügbar (Offline / Stub)";
+                LastStatusMessage = "IronNestCoop-Mod nicht gefunden — für Lobby-Funktionen benötigt";
                 return;
             }
         }
@@ -321,7 +322,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
             if (!IsSteamAvailable || _mCreateLobby == null)
             {
-                LastStatusMessage = "❌ Steam / Co-op Mod nicht verfügbar.";
+                LastStatusMessage = "❌ IronNestCoop-Mod fehlt (für Lobby-Erstellung benötigt).";
                 return;
             }
 
@@ -343,6 +344,12 @@ namespace IronXNestCommand.Host.BepInEx.Steam
             }
         }
 
+        private static string SanitizeHex(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            return Regex.Replace(input, @"[^0-9a-fA-F]", "").ToUpperInvariant();
+        }
+
         public static void TryJoinLobby(string codeOrId)
         {
             if (string.IsNullOrWhiteSpace(codeOrId))
@@ -352,13 +359,23 @@ namespace IronXNestCommand.Host.BepInEx.Steam
             }
 
             string cleanCode = codeOrId.Trim();
+            string sanitizedHex = SanitizeHex(cleanCode);
 
             if (IsIronNestCoopDetected)
             {
                 try
                 {
                     ulong lobbyId = 0;
-                    if (_coopResolveLobbyId != null)
+                    if (_coopResolveLobbyId != null && !string.IsNullOrEmpty(sanitizedHex))
+                    {
+                        try
+                        {
+                            lobbyId = (ulong)_coopResolveLobbyId.Invoke(null, new object[] { sanitizedHex });
+                        }
+                        catch { }
+                    }
+
+                    if (lobbyId == 0 && _coopResolveLobbyId != null)
                     {
                         try
                         {

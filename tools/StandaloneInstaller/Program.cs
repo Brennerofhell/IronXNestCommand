@@ -531,6 +531,7 @@ namespace IronXNestCommand.Installer
 
                     ExtractResource(asm, "IronXNestCommand.dll", Path.Combine(target, "IronXNestCommand.dll"));
                     ExtractResource(asm, "IronXNestCommand.Core.dll", Path.Combine(target, "IronXNestCommand.Core.dll"));
+                    try { ExtractResource(asm, "IronNestCoop.Core.dll", Path.Combine(target, "IronNestCoop.Core.dll")); } catch { }
                     installedCount++;
                 }
 

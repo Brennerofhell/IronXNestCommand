@@ -50,9 +50,10 @@ Source: "..\tools\vendor\BepInEx-extracted\*"; DestDir: "{app}"; Components: bep
 ; MelonLoader Runtime (vendored) -- keine separate MelonLoader-Installation durch den Nutzer noetig.
 Source: "..\tools\vendor\MelonLoader-extracted\*"; DestDir: "{app}"; Components: melon; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; BepInEx Payload (unsere Mod-DLLs)
+; BepInEx Payload (unsere Mod-DLLs + Co-op Backend)
 Source: "..\IronXNestCommand.Host.BepInEx\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
 Source: "..\IronXNestCommand.Core\bin\Release\IronXNestCommand.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
+Source: "..\tools\extracted_coop\IronNestCoop.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
 
 ; MelonLoader Payload (unsere Mod-DLL)
 Source: "..\IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\Mods"; Components: melon; Flags: ignoreversion

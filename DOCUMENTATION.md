@@ -403,6 +403,18 @@ Das per Soft-Dependency erkannte Basis-Plugin `IronNestCoop.Core.dll` zeichnet �
 
 ---
 
+### 3.25 🌐 Hex-Lobbycode-Sanitizer & Co-op-Backend-Bundling (`IronNestCoop.Core.dll`)
+
+#### Problem-Analyse (Root Cause)
+1. **Hex-Beitritt schlug bei formatiertem Code fehl:** Nutzer kopieren/tippen Lobby-Codes oft mit Bindestrichen (z. B. `4A2F-9C1B`) oder Leerzeichen ein. `SteamNet.ResolveLobbyId` verlässt sich intern auf `UInt64.TryParse(enteredHex, NumberStyles.HexNumber, ...)`, welches bei jedem nicht-hexadezimalen Sonderzeichen fehlschlägt und `0` liefert. Der Beitritt brach mit `❌ Ungültiger Lobby-Code` ab.
+2. **Fehlende Backend-DLL bei Standalone-Installationen:** Wenn das Spielverzeichnis bereinigt oder ohne die originale Co-op-Mod eingerichtet wurde, fehlte `IronNestCoop.Core.dll` im `BepInEx/plugins/`-Ordner. Ohne dieses Backend konnte die Mod zwar Steam-Präsenz anzeigen, aber keine echten Spielersynchronisationen, Turret-Steuerungen oder P2P-Netzwerknachrichten ausführen.
+
+#### Die Lösung
+- **`SanitizeHex(string)`**: Filtert vor der Übergabe an `ResolveLobbyId` alle ungültigen Zeichen via Regex `[^0-9a-fA-F]` heraus und wandelt in Großbuchstaben um. `4A2F-9C1B` wird automatisch zu `4A2F9C1B` aufgelöst.
+- **Vollständiges Bundling**: `IronNestCoop.Core.dll` wird nun automatisch in alle Installer (`Build-And-Deploy.bat`, `Deploy.ps1`, `Package-Release.ps1`, `Installer.iss`, `Build-Standalone-Exe.ps1`) eingebettet und bei der Installation direkt mit in `BepInEx/plugins/` bereitgestellt.
+
+---
+
 ## 5. Build- & Deployment-Anleitung
 
 ### 5.1 Dual-Loader Deployment (1-Klick)

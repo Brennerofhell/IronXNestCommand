@@ -86,6 +86,11 @@ if (Test-Path $melonDll) {
     $argsList += "/resource:$melonDll,IronXNestCommand_Melon.dll"
 }
 
+$coopDll = Join-Path $repoRoot "tools\extracted_coop\IronNestCoop.Core.dll"
+if (Test-Path $coopDll) {
+    $argsList += "/resource:$coopDll,IronNestCoop.Core.dll"
+}
+
 $argsList += $sourceFile
 
 Write-Host "[4/4] Verlinke Ressourcen ($([Math]::Round((Get-Item $bepRuntimeZip).Length / 1MB, 1)) MB BepInEx + $([Math]::Round((Get-Item $melonRuntimeZip).Length / 1MB, 1)) MB MelonLoader)..." -ForegroundColor Yellow

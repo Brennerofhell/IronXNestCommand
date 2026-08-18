@@ -290,7 +290,7 @@ namespace IronXNestCommand.Steam
 
             if (!IsSteamAvailable || _mCreateLobby == null)
             {
-                LastStatusMessage = "❌ Steam / Co-op Mod nicht verfügbar.";
+                LastStatusMessage = "❌ IronNestCoop-Mod fehlt (für Lobby-Erstellung benötigt).";
                 return;
             }
 
@@ -312,6 +312,12 @@ namespace IronXNestCommand.Steam
             }
         }
 
+        private static string SanitizeHex(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            return System.Text.RegularExpressions.Regex.Replace(input, @"[^0-9a-fA-F]", "").ToUpperInvariant();
+        }
+
         public static void TryJoinLobby(string codeOrId)
         {
             if (string.IsNullOrWhiteSpace(codeOrId))
@@ -321,13 +327,23 @@ namespace IronXNestCommand.Steam
             }
 
             string cleanCode = codeOrId.Trim();
+            string sanitizedHex = SanitizeHex(cleanCode);
 
             if (IsIronNestCoopDetected)
             {
                 try
                 {
                     ulong lobbyId = 0;
-                    if (_coopResolveLobbyId != null)
+                    if (_coopResolveLobbyId != null && !string.IsNullOrEmpty(sanitizedHex))
+                    {
+                        try
+                        {
+                            lobbyId = (ulong)_coopResolveLobbyId.Invoke(null, new object[] { sanitizedHex });
+                        }
+                        catch { }
+                    }
+
+                    if (lobbyId == 0 && _coopResolveLobbyId != null)
                     {
                         try
                         {

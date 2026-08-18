@@ -57,6 +57,13 @@ Write-Host "[2/4] Kopiere Release-Dateien..." -ForegroundColor Yellow
 # DLLs kopieren
 Copy-Item (Join-Path $repoRoot "IronXNestCommand.Host.BepInEx\bin\$Configuration\IronXNestCommand.dll") -Destination $tempDir
 Copy-Item (Join-Path $repoRoot "IronXNestCommand.Core\bin\$Configuration\IronXNestCommand.Core.dll") -Destination $tempDir
+$coopSource = Join-Path $repoRoot "tools\extracted_coop\IronNestCoop.Core.dll"
+if (Test-Path $coopSource) {
+    Copy-Item $coopSource -Destination $tempDir -Force
+    $tempPlugins = Join-Path $tempDir "BepInEx\plugins"
+    if (-not (Test-Path $tempPlugins)) { New-Item -ItemType Directory -Path $tempPlugins -Force | Out-Null }
+    Copy-Item $coopSource -Destination $tempPlugins -Force
+}
 
 # Modloader-Runtimes buendeln (BepInEx 6 IL2CPP + MelonLoader) -- damit keine separate
 # Modloader-Installation mehr noetig ist. Siehe THIRD-PARTY-LICENSES.md.
