@@ -34,33 +34,19 @@ UninstallDisplayIcon={app}\{#GameExe}
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-[Types]
-Name: "full"; Description: "Vollstaendige Installation (BepInEx 6 IL2CPP)"
-Name: "custom"; Description: "Benutzerdefiniert"; Flags: iscustom
-
-[Components]
-Name: "bepinex"; Description: "IronXNestCommand BepInEx 6 Host (Standard / Empfohlen)"; Types: full custom; Flags: fixed
-Name: "melon"; Description: "IronXNestCommand MelonLoader 0.7.3 Host (Optional)"; Types: custom
-
 [Files]
 ; BepInEx 6 IL2CPP Runtime (vendored, siehe tools/Fetch-Vendor-Runtimes.ps1 + THIRD-PARTY-LICENSES.md)
 ; -- keine separate BepInEx-Installation durch den Nutzer noetig.
-Source: "..\tools\vendor\BepInEx-extracted\*"; DestDir: "{app}"; Components: bepinex; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; MelonLoader Runtime (vendored) -- keine separate MelonLoader-Installation durch den Nutzer noetig.
-Source: "..\tools\vendor\MelonLoader-extracted\*"; DestDir: "{app}"; Components: melon; Flags: ignoreversion recursesubdirs createallsubdirs
+; MelonLoader wird ab dieser Version nicht mehr released (siehe CLAUDE.md) -- nur noch BepInEx.
+Source: "..\tools\vendor\BepInEx-extracted\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; BepInEx Payload (unsere Mod-DLLs + Co-op Backend)
-Source: "..\IronXNestCommand.Host.BepInEx\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
-Source: "..\IronXNestCommand.Core\bin\Release\IronXNestCommand.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
-Source: "..\tools\extracted_coop\IronNestCoop.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
+Source: "..\IronXNestCommand.Host.BepInEx\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\BepInEx\plugins"; Flags: ignoreversion
+Source: "..\IronXNestCommand.Core\bin\Release\IronXNestCommand.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Flags: ignoreversion
+Source: "..\tools\extracted_coop\IronNestCoop.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Flags: ignoreversion
 
-; MelonLoader Payload (unsere Mod-DLL)
-Source: "..\IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\Mods"; Components: melon; Flags: ignoreversion
-
-; Lizenzen der gebuendelten Modloader-Runtimes
-Source: "..\Licenses\LICENSE-BepInEx.txt"; DestDir: "{app}\Licenses"; Components: bepinex; Flags: ignoreversion
-Source: "..\Licenses\LICENSE-MelonLoader.txt"; DestDir: "{app}\Licenses"; Components: melon; Flags: ignoreversion
+; Lizenz der gebuendelten BepInEx-Runtime
+Source: "..\Licenses\LICENSE-BepInEx.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-LICENSES.md"; DestDir: "{app}\UserData\IronXNestCommand"; Flags: ignoreversion
 
 ; Mod Manager GUI & Batch Tools

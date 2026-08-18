@@ -79,30 +79,32 @@ namespace IronXNestCommand.Host.BepInEx.Steam
             if (_resolverRegistered) return;
             _resolverRegistered = true;
 
-            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            AppDomain.CurrentDomain.AssemblyResolve += ResolveMissingAssembly;
+        }
+
+        private static Assembly ResolveMissingAssembly(object sender, ResolveEventArgs args)
+        {
+            try
             {
-                try
+                string asmName = new AssemblyName(args.Name).Name + ".dll";
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] searchDirs = {
+                    System.IO.Path.Combine(baseDir, "BepInEx", "core"),
+                    System.IO.Path.Combine(baseDir, "BepInEx", "plugins"),
+                    System.IO.Path.Combine(baseDir, "Mods"),
+                    System.IO.Path.Combine(baseDir, "UserLibs")
+                };
+                foreach (var dir in searchDirs)
                 {
-                    string asmName = new AssemblyName(args.Name).Name + ".dll";
-                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                    string[] searchDirs = {
-                        System.IO.Path.Combine(baseDir, "BepInEx", "core"),
-                        System.IO.Path.Combine(baseDir, "BepInEx", "plugins"),
-                        System.IO.Path.Combine(baseDir, "Mods"),
-                        System.IO.Path.Combine(baseDir, "UserLibs")
-                    };
-                    foreach (var dir in searchDirs)
+                    string fullPath = System.IO.Path.Combine(dir, asmName);
+                    if (System.IO.File.Exists(fullPath))
                     {
-                        string fullPath = System.IO.Path.Combine(dir, asmName);
-                        if (System.IO.File.Exists(fullPath))
-                        {
-                            try { return Assembly.LoadFrom(fullPath); } catch { }
-                        }
+                        try { return Assembly.LoadFrom(fullPath); } catch { }
                     }
                 }
-                catch { }
-                return null;
-            };
+            }
+            catch { }
+            return null;
         }
 
         private static void ResolveTypes()
@@ -381,7 +383,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 {
                     _coopCreateLobby.Invoke(null, null);
                     LastStatusMessage = "Erstelle Co-op Lobby...";
-                    Plugin.Log?.LogInfo("[SteamworksDetector] IronNestCoop CreateLobby aufgerufen.");
+                    ModLogger.Info("[SteamworksDetector] IronNestCoop CreateLobby aufgerufen.");
                     CheckSteamState();
                     return;
                 }
@@ -389,7 +391,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 {
                     var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
                     LastStatusMessage = $"Fehler: {inner.Message}";
-                    Plugin.Log?.LogWarning($"[SteamworksDetector] CreateLobby Fehler: {inner}");
+                    ModLogger.Warn($"[SteamworksDetector] CreateLobby Fehler: {inner}");
                     return;
                 }
             }

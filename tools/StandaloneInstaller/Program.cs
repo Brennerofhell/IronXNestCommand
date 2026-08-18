@@ -341,11 +341,12 @@ namespace IronXNestCommand.Installer
 
             chkMelon = new CheckBox
             {
-                Text = "MelonLoader 0.7.3+ (Mods/)",
-                Checked = true,
+                Text = "MelonLoader (vorübergehend nicht released)",
+                Checked = false,
+                Enabled = false,
                 Location = new Point(200, 108),
                 AutoSize = true,
-                ForeColor = MainForm.cText,
+                ForeColor = MainForm.cMuted,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
             chkMelon.CheckedChanged += (s, e) => RefreshState();

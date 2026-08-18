@@ -21,27 +21,23 @@ Write-Host ""
 # 1. Erst die Mod DLLs bauen falls noch nicht vorhanden
 $bepDll   = Join-Path $repoRoot "IronXNestCommand.Host.BepInEx\bin\$Configuration\IronXNestCommand.dll"
 $coreDll  = Join-Path $repoRoot "IronXNestCommand.Core\bin\$Configuration\IronXNestCommand.Core.dll"
-$melonDll = Join-Path $repoRoot "IronXNestCommand.MelonLoader\bin\$Configuration\IronXNestCommand.dll"
 
 if (-not (Test-Path $bepDll) -or -not (Test-Path $coreDll)) {
     Write-Host "[1/4] Baue Solution..." -ForegroundColor Yellow
     dotnet build (Join-Path $repoRoot "IronXNestCommand.sln") -c $Configuration
 }
 
-# 1b. Vendored Modloader-Runtimes sicherstellen und zu Einzel-ZIPs fuer /resource: buendeln
-Write-Host "[1b/4] Stelle vendored Modloader-Runtimes sicher..." -ForegroundColor Yellow
+# 1b. Vendored BepInEx-Runtime sicherstellen und zu einem ZIP fuer /resource: buendeln
+# (MelonLoader wird ab dieser Version nicht mehr released, siehe CLAUDE.md.)
+Write-Host "[1b/4] Stelle vendored BepInEx-Runtime sicher..." -ForegroundColor Yellow
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Fetch-Vendor-Runtimes.ps1")
 
 $vendorDir = Join-Path $repoRoot "tools\vendor"
 $bepExtractDir   = Join-Path $vendorDir "BepInEx-extracted"
-$melonExtractDir = Join-Path $vendorDir "MelonLoader-extracted"
 $bepRuntimeZip   = Join-Path $distDir "_bepinex_runtime.zip"
-$melonRuntimeZip = Join-Path $distDir "_melon_runtime.zip"
 
 if (Test-Path $bepRuntimeZip) { Remove-Item $bepRuntimeZip -Force }
-if (Test-Path $melonRuntimeZip) { Remove-Item $melonRuntimeZip -Force }
 Compress-Archive -Path "$bepExtractDir\*" -DestinationPath $bepRuntimeZip -CompressionLevel Optimal
-Compress-Archive -Path "$melonExtractDir\*" -DestinationPath $melonRuntimeZip -CompressionLevel Optimal
 
 # 2. csc.exe suchen
 Write-Host "[2/4] Suche C# Compiler (csc.exe)..." -ForegroundColor Yellow
@@ -78,13 +74,8 @@ $argsList = @(
     "/reference:System.IO.Compression.FileSystem.dll",
     "/resource:$bepDll,IronXNestCommand.dll",
     "/resource:$coreDll,IronXNestCommand.Core.dll",
-    "/resource:$bepRuntimeZip,BepInExRuntime.zip",
-    "/resource:$melonRuntimeZip,MelonLoaderRuntime.zip"
+    "/resource:$bepRuntimeZip,BepInExRuntime.zip"
 )
-
-if (Test-Path $melonDll) {
-    $argsList += "/resource:$melonDll,IronXNestCommand_Melon.dll"
-}
 
 $coopDll = Join-Path $repoRoot "tools\extracted_coop\IronNestCoop.Core.dll"
 if (Test-Path $coopDll) {
@@ -93,7 +84,7 @@ if (Test-Path $coopDll) {
 
 $argsList += $sourceFile
 
-Write-Host "[4/4] Verlinke Ressourcen ($([Math]::Round((Get-Item $bepRuntimeZip).Length / 1MB, 1)) MB BepInEx + $([Math]::Round((Get-Item $melonRuntimeZip).Length / 1MB, 1)) MB MelonLoader)..." -ForegroundColor Yellow
+Write-Host "[4/4] Verlinke Ressourcen ($([Math]::Round((Get-Item $bepRuntimeZip).Length / 1MB, 1)) MB BepInEx)..." -ForegroundColor Yellow
 
 & $csc $argsList
 if ($LASTEXITCODE -eq 0) {
@@ -108,4 +99,4 @@ if ($LASTEXITCODE -eq 0) {
     Write-Error "Kompilierung des Installers fehlgeschlagen."
 }
 
-Remove-Item -Force -ErrorAction SilentlyContinue $bepRuntimeZip, $melonRuntimeZip
+Remove-Item -Force -ErrorAction SilentlyContinue $bepRuntimeZip

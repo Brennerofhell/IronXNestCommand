@@ -1,17 +1,20 @@
 <#
 .SYNOPSIS
-    Laedt die gepinnten BepInEx 6 IL2CPP- und MelonLoader-Runtime-Builds herunter und entpackt sie
-    nach tools/vendor/, damit Package-Release.ps1 sie in ZIP/Standalone-exe/Setup.exe einbetten kann.
+    Laedt den gepinnten BepInEx 6 IL2CPP-Runtime-Build herunter und entpackt ihn nach tools/vendor/,
+    damit Package-Release.ps1 ihn in ZIP/Standalone-exe/Setup.exe einbetten kann.
 
 .NOTES
-    Beide Loader werden unter einer Lizenz vertrieben, die das Bundling kompilierter Binaries in
-    einem Drittanbieter-Installer erlaubt (BepInEx: LGPL-2.1, MelonLoader: Apache-2.0) -- siehe
-    THIRD-PARTY-LICENSES.md im Repo-Root. Downloads werden unter tools/vendor/ gecacht (gitignored,
-    grosse Binaries) und nur bei Bedarf erneut geholt/entpackt.
+    BepInEx wird unter einer Lizenz vertrieben, die das Bundling kompilierter Binaries in einem
+    Drittanbieter-Installer erlaubt (LGPL-2.1) -- siehe THIRD-PARTY-LICENSES.md im Repo-Root.
+    Downloads werden unter tools/vendor/ gecacht (gitignored, grosse Binaries) und nur bei Bedarf
+    erneut geholt/entpackt.
 
-    Versions-Pins (bei Bedarf hier aktualisieren):
+    MelonLoader wird ab dieser Version nicht mehr released (siehe CLAUDE.md) -- der Fetch-Aufruf
+    dafuer wurde entfernt. Der MelonLoader-Quellcode (IronXNestCommand.MelonLoader) bleibt im Repo,
+    wird aber nicht mehr gebaut/gebundlet.
+
+    Versions-Pin (bei Bedarf hier aktualisieren):
       - BepInEx 6 IL2CPP Bleeding-Edge Build 785 (2026-06-28)
-      - MelonLoader v0.7.3 (Asset: MelonLoader.x64.zip)
 #>
 
 [CmdletBinding()]
@@ -27,10 +30,6 @@ $dlDir     = Join-Path $vendorDir "downloads"
 $BepInExUrl      = "https://builds.bepinex.dev/projects/bepinex_be/785/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785+6abdba4.zip"
 $BepInExZipName  = "BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785.zip"
 $BepInExExtractDir = Join-Path $vendorDir "BepInEx-extracted"
-
-$MelonLoaderUrl      = "https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/MelonLoader.x64.zip"
-$MelonLoaderZipName  = "MelonLoader.x64.v0.7.3.zip"
-$MelonLoaderExtractDir = Join-Path $vendorDir "MelonLoader-extracted"
 
 New-Item -ItemType Directory -Force -Path $dlDir | Out-Null
 
@@ -64,13 +63,11 @@ function Get-VendoredRuntime {
 }
 
 Write-Host "=================================================================" -ForegroundColor Cyan
-Write-Host "  VENDOR RUNTIMES // BepInEx 6 IL2CPP + MelonLoader 0.7.3" -ForegroundColor Cyan
+Write-Host "  VENDOR RUNTIMES // BepInEx 6 IL2CPP" -ForegroundColor Cyan
 Write-Host "=================================================================" -ForegroundColor Cyan
 
-Get-VendoredRuntime -Name "BepInEx"    -Url $BepInExUrl      -ZipFileName $BepInExZipName      -ExtractDir $BepInExExtractDir
-Get-VendoredRuntime -Name "MelonLoader" -Url $MelonLoaderUrl -ZipFileName $MelonLoaderZipName   -ExtractDir $MelonLoaderExtractDir
+Get-VendoredRuntime -Name "BepInEx" -Url $BepInExUrl -ZipFileName $BepInExZipName -ExtractDir $BepInExExtractDir
 
 Write-Host ""
-Write-Host "  -> Vendored Runtimes bereit:" -ForegroundColor Green
+Write-Host "  -> Vendored Runtime bereit:" -ForegroundColor Green
 Write-Host "     $BepInExExtractDir" -ForegroundColor Green
-Write-Host "     $MelonLoaderExtractDir" -ForegroundColor Green

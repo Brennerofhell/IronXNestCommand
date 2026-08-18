@@ -30,11 +30,10 @@ if ($LASTEXITCODE -ne 0) {
     Write-Warning "Build meldete Fehler oder fehlende Interop-Assemblies. Verwende existierende Binaries in bin/$Configuration."
 }
 
-Write-Host "[1b/4] Stelle vendored Modloader-Runtimes sicher (BepInEx + MelonLoader)..." -ForegroundColor Yellow
+Write-Host "[1b/4] Stelle vendored BepInEx-Runtime sicher..." -ForegroundColor Yellow
 & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Fetch-Vendor-Runtimes.ps1")
 $vendorDir = Join-Path $repoRoot "tools\vendor"
 $bepExtractDir   = Join-Path $vendorDir "BepInEx-extracted"
-$melonExtractDir = Join-Path $vendorDir "MelonLoader-extracted"
 
 # 2. Dist-Verzeichnis vorbereiten
 if (Test-Path $tempDir) { Remove-Item -Path $tempDir -Recurse -Force }
@@ -64,14 +63,13 @@ if (Test-Path $coopSource) {
     Copy-Item $coopSource -Destination $tempPlugins -Force
 }
 
-# Modloader-Runtimes buendeln (BepInEx 6 IL2CPP + MelonLoader) -- damit keine separate
-# Modloader-Installation mehr noetig ist. Siehe THIRD-PARTY-LICENSES.md.
+# BepInEx-6-IL2CPP-Runtime buendeln -- damit keine separate BepInEx-Installation mehr
+# noetig ist. MelonLoader wird ab dieser Version nicht mehr released (siehe CLAUDE.md).
+# Siehe THIRD-PARTY-LICENSES.md.
 Copy-Item "$bepExtractDir\*" -Destination $tempDir -Recurse -Force
-Copy-Item "$melonExtractDir\*" -Destination $tempDir -Recurse -Force
 
 New-Item -ItemType Directory -Force -Path (Join-Path $tempDir "Licenses") | Out-Null
 Copy-Item (Join-Path $repoRoot "Licenses\LICENSE-BepInEx.txt") -Destination (Join-Path $tempDir "Licenses")
-Copy-Item (Join-Path $repoRoot "Licenses\LICENSE-MelonLoader.txt") -Destination (Join-Path $tempDir "Licenses")
 Copy-Item (Join-Path $repoRoot "THIRD-PARTY-LICENSES.md") -Destination $tempDir
 
 # Skripte kopieren
