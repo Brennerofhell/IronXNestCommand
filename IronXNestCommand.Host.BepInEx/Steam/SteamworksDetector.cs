@@ -28,6 +28,8 @@ namespace IronXNestCommand.Host.BepInEx.Steam
         private static PropertyInfo _coopCurrentLobbyShort;
         private static PropertyInfo _coopConnectedPeers;
         private static PropertyInfo _coopLocalPlayerName;
+        private static PropertyInfo _coopPanelStatus;
+        private static PropertyInfo _coopSteamReady;
 
         // Generic Steamworks Reflection Cache
         private static Type _steamMatchmakingType;
@@ -95,6 +97,8 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 _coopCurrentLobbyShort = _coopSteamNetType.GetProperty("CurrentLobbyShort", BindingFlags.Public | BindingFlags.Static);
                 _coopConnectedPeers = _coopSteamNetType.GetProperty("ConnectedPeers", BindingFlags.Public | BindingFlags.Static);
                 _coopLocalPlayerName = _coopSteamNetType.GetProperty("LocalPlayerName", BindingFlags.Public | BindingFlags.Static);
+                _coopPanelStatus = _coopSteamNetType.GetProperty("PanelStatus", BindingFlags.Public | BindingFlags.Static);
+                _coopSteamReady = _coopSteamNetType.GetProperty("SteamReady", BindingFlags.Public | BindingFlags.Static);
 
                 LastStatusMessage = "IronNestCoop verbunden (Bereit)";
                 return;
@@ -175,6 +179,11 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
         public static void CheckSteamState()
         {
+            if (!IsIronNestCoopDetected)
+            {
+                ResolveTypes();
+            }
+
             if (IsIronNestCoopDetected && _coopInLobby != null)
             {
                 try
@@ -216,7 +225,16 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                         CurrentLobbyId = 0;
                         CurrentLobbyShort = "";
                         ConnectedPlayers.Clear();
-                        LastStatusMessage = "IronNestCoop bereit (Keine Lobby)";
+
+                        string panel = (string)_coopPanelStatus?.GetValue(null);
+                        if (!string.IsNullOrEmpty(panel))
+                        {
+                            LastStatusMessage = panel;
+                        }
+                        else
+                        {
+                            LastStatusMessage = "IronNestCoop bereit (Keine Lobby)";
+                        }
                         FairnessGuard.SetMultiplayerState(false);
                     }
                     return;
@@ -236,6 +254,11 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
         public static void TryCreateLobby(int maxMembers = 4)
         {
+            if (!IsIronNestCoopDetected)
+            {
+                ResolveTypes();
+            }
+
             if (IsIronNestCoopDetected && _coopCreateLobby != null)
             {
                 try
@@ -243,32 +266,38 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                     _coopCreateLobby.Invoke(null, null);
                     LastStatusMessage = "⏳ Erstelle Co-op Lobby...";
                     ModLogger.Info("[SteamworksDetector] IronNestCoop CreateLobby aufgerufen.");
+                    CheckSteamState();
                     return;
                 }
                 catch (Exception ex)
                 {
                     LastStatusMessage = $"❌ Fehler: {ex.Message}";
+                    ModLogger.Warn($"[SteamworksDetector] CreateLobby Fehler: {ex}");
                     return;
                 }
             }
 
             if (!IsSteamAvailable || _mCreateLobby == null)
             {
-                LastStatusMessage = "❌ Steam nicht verfügbar.";
+                LastStatusMessage = "❌ Steam / Co-op Mod nicht verfügbar.";
                 return;
             }
 
             try
             {
-                object eLobbyTypePublic = Enum.ToObject(
-                    _steamMatchmakingType.Assembly.GetType("Steamworks.ELobbyType") ?? typeof(int), 3);
+                Type eLobbyType = _steamMatchmakingType.Assembly.GetType("Steamworks.ELobbyType")
+                               ?? Type.GetType("Steamworks.ELobbyType, Steamworks.NET")
+                               ?? Type.GetType("Steamworks.ELobbyType, com.rlabrecque.steamworks.net");
+                object eLobbyTypePublic = eLobbyType != null ? Enum.ToObject(eLobbyType, 2) : 2;
 
                 _mCreateLobby.Invoke(null, new object[] { eLobbyTypePublic, maxMembers });
                 LastStatusMessage = $"⏳ Lobby wird erstellt ({maxMembers} Slots)...";
+                ModLogger.Info($"[SteamworksDetector] SteamMatchmaking.CreateLobby für {maxMembers} Spieler aufgerufen.");
             }
             catch (Exception ex)
             {
                 LastStatusMessage = $"❌ Fehler: {ex.Message}";
+                ModLogger.Warn($"[SteamworksDetector] Fehler beim Erstellen der Steam-Lobby: {ex.Message}");
             }
         }
 

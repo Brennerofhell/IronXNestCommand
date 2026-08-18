@@ -26,7 +26,7 @@ if errorlevel 1 goto :BuildError
 echo.
 echo [2/2] Kopiere Mod-DLLs in Spielverzeichnisse...
 
-powershell -NoProfile -Command "New-Item -ItemType Directory -Path '%MODS_DIR%' -Force | Out-Null; Copy-Item '%MELON_DLL%' '%MODS_DIR%\IronXNestCommand.dll' -Force; Write-Host '  [+] MelonLoader: %MODS_DIR%\IronXNestCommand.dll'; New-Item -ItemType Directory -Path '%PLUGINS_DIR%' -Force | Out-Null; Copy-Item '%BEPINEX_DLL%' '%PLUGINS_DIR%\IronXNestCommand.dll' -Force; Copy-Item '%CORE_DLL%' '%PLUGINS_DIR%\IronXNestCommand.Core.dll' -Force; Write-Host '  [+] BepInEx:     %PLUGINS_DIR%\IronXNestCommand.dll'"
+powershell -NoProfile -Command "New-Item -ItemType Directory -Path '%MODS_DIR%' -Force | Out-Null; Copy-Item '%MELON_DLL%' '%MODS_DIR%\IronXNestCommand.dll' -Force; Write-Host '  [+] MelonLoader: %MODS_DIR%\IronXNestCommand.dll'; New-Item -ItemType Directory -Path '%PLUGINS_DIR%' -Force | Out-Null; Copy-Item '%BEPINEX_DLL%' '%PLUGINS_DIR%\IronXNestCommand.dll' -Force; Copy-Item '%CORE_DLL%' '%PLUGINS_DIR%\IronXNestCommand.Core.dll' -Force; if (Test-Path '%~dp0tools\extracted_coop\IronNestCoop.Core.dll') { Copy-Item '%~dp0tools\extracted_coop\IronNestCoop.Core.dll' '%PLUGINS_DIR%\IronNestCoop.Core.dll' -Force; Write-Host '  [+] IronNestCoop: %PLUGINS_DIR%\IronNestCoop.Core.dll' }; Write-Host '  [+] BepInEx:     %PLUGINS_DIR%\IronXNestCommand.dll'"
 
 echo.
 echo ==============================================================================

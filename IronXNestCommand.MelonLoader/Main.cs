@@ -51,6 +51,7 @@ namespace IronXNestCommand
             // 7. Loadout-System & Notizen initialisieren
             LoadoutManager.Initialize();
             IronXNestCommand.Notes.TargetNotesManager.Initialize();
+            TurretTelemetry.Initialize();
 
             // 8. Steamworks Multiplayer-Erkennung initialisieren
             SteamworksDetector.Initialize();
@@ -72,8 +73,9 @@ namespace IronXNestCommand
 
         public override void OnUpdate()
         {
-            // Regelmäßige Prüfung der Steam-Lobby
+            // Regelmäßige Prüfung der Steam-Lobby & Telemetrie
             SteamworksDetector.Update(0.1f);
+            TurretTelemetry.Update();
 
             // Overlay-Hotkey abfangen
             CommandOverlay.Update();

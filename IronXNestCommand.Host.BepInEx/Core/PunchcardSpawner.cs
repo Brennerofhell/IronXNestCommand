@@ -185,21 +185,13 @@ namespace IronXNestCommand.Host.BepInEx.Core
             return args;
         }
 
-        private static Il2CppSystem.Type GetIl2CppType(Type managedType)
+        private static object GetIl2CppType(Type managedType)
         {
             if (managedType == null) return null;
             try
             {
                 var il2cppType = Il2CppInterop.Runtime.Il2CppType.From(managedType);
                 if (il2cppType != null) return il2cppType;
-            }
-            catch { }
-
-            try
-            {
-                return Il2CppSystem.Type.GetType(managedType.AssemblyQualifiedName)
-                    ?? Il2CppSystem.Type.GetType($"{managedType.FullName}, Assembly-CSharp")
-                    ?? Il2CppSystem.Type.GetType(managedType.FullName);
             }
             catch { }
 
@@ -215,21 +207,21 @@ namespace IronXNestCommand.Host.BepInEx.Core
 
             if (_printerType != null)
             {
-                var il2cppPrinterType = GetIl2CppType(_printerType);
+                dynamic il2cppPrinterType = GetIl2CppType(_printerType);
                 if (il2cppPrinterType != null)
                     _cachedPrinters = UnityEngine.Object.FindObjectsOfType(il2cppPrinterType);
             }
 
             if (_cardType != null)
             {
-                var il2cppCardType = GetIl2CppType(_cardType);
+                dynamic il2cppCardType = GetIl2CppType(_cardType);
                 if (il2cppCardType != null)
                     _cachedCards = Resources.FindObjectsOfTypeAll(il2cppCardType);
             }
 
             if (_reqSlotType != null)
             {
-                var il2cppReqType = GetIl2CppType(_reqSlotType);
+                dynamic il2cppReqType = GetIl2CppType(_reqSlotType);
                 if (il2cppReqType != null)
                     _cachedSlots = UnityEngine.Object.FindObjectsOfType(il2cppReqType);
             }

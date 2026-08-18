@@ -19,6 +19,12 @@ if not exist "%HOST_DLL%" (
     )
 )
 
+if not exist "%CORE_DLL%" (
+    if exist "%SOURCE_DIR%IronXNestCommand.Core.dll" (
+        set "CORE_DLL=%SOURCE_DIR%IronXNestCommand.Core.dll"
+    )
+)
+
 :: Suche nach dem Steam-Spielverzeichnis
 set "GAME_PATH="
 
@@ -74,6 +80,9 @@ if not exist "%PLUGINS_DIR%" (
 if exist "%HOST_DLL%" (
     copy /Y "%HOST_DLL%" "%PLUGINS_DIR%\IronXNestCommand.dll" >nul
     if exist "%CORE_DLL%" copy /Y "%CORE_DLL%" "%PLUGINS_DIR%\IronXNestCommand.Core.dll" >nul
+    if exist "%SOURCE_DIR%tools\extracted_coop\IronNestCoop.Core.dll" (
+        copy /Y "%SOURCE_DIR%tools\extracted_coop\IronNestCoop.Core.dll" "%PLUGINS_DIR%\IronNestCoop.Core.dll" >nul
+    )
     echo ==============================================================================
     echo   [ERFOLG] IronXNestCommand wurde in BepInEx/plugins/ installiert!
     echo   Pfad: %PLUGINS_DIR%\IronXNestCommand.dll

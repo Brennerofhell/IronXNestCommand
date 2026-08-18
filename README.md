@@ -53,12 +53,18 @@ Verhindert das unerwartete Verschwinden oder Despawnen von gegnerischen Einheite
 2. ZIP entpacken, `Install-Mod.bat` doppelklicken (Spielverzeichnis wird automatisch gefunden).
 3. Voraussetzung: BepInEx 6 (IL2CPP) oder MelonLoader 0.7.3+ (IL2CPP) muss bereits im Spielverzeichnis installiert sein.
 
-### Option B: Selbst bauen
+### Option B: Selbst bauen & direkt deployen
 Führe im Projektverzeichnis einfach [`Build-And-Deploy.bat`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/Build-And-Deploy.bat) aus.
 
 Das Skript baut das Projekt und installiert die DLLs automatisch an beiden Orten:
 - `Mods\IronXNestCommand.dll` (für MelonLoader)
 - `BepInEx\plugins\IronXNestCommand.dll` (für BepInEx)
+
+### Option C: Release-Paket oder Installer .exe bauen
+Führe [`Package-Release.bat`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/Package-Release.bat) aus:
+- Baut die Solution im Release-Modus.
+- Erstellt ein fertiges, verteilbares Standalone-ZIP-Paket unter `dist/IronXNestCommand_v0.1.0.zip`.
+- Wenn [Inno Setup 6](https://jrsoftware.org/isdl.php) installiert ist, wird über [`tools/Installer.iss`](file:///c:/Users/07785/Documents/PROGRAMMIEREN/IronXNestCommand/tools/Installer.iss) automatisch eine eigenständige `IronXNestCommand_Setup_v0.1.0.exe` generiert.
 
 ---
 

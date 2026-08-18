@@ -31,6 +31,8 @@ namespace IronXNestCommand.Steam
         private static PropertyInfo _coopCurrentLobbyShort;
         private static PropertyInfo _coopConnectedPeers;
         private static PropertyInfo _coopLocalPlayerName;
+        private static PropertyInfo _coopPanelStatus;
+        private static PropertyInfo _coopSteamReady;
 
         // Generic Steamworks Reflection Cache
         private static Type _steamMatchmakingType;
@@ -43,6 +45,7 @@ namespace IronXNestCommand.Steam
         private static MethodInfo _mGetNumLobbyMembers;
         private static MethodInfo _mGetLobbyMemberByIndex;
         private static MethodInfo _mGetFriendPersonaName;
+        private static MethodInfo _mActivateGameOverlayInviteDialog;
 
         private static float _pollTimer = 0f;
         private const float PollInterval = 2.0f;
@@ -98,6 +101,8 @@ namespace IronXNestCommand.Steam
                 _coopCurrentLobbyShort = _coopSteamNetType.GetProperty("CurrentLobbyShort", BindingFlags.Public | BindingFlags.Static);
                 _coopConnectedPeers = _coopSteamNetType.GetProperty("ConnectedPeers", BindingFlags.Public | BindingFlags.Static);
                 _coopLocalPlayerName = _coopSteamNetType.GetProperty("LocalPlayerName", BindingFlags.Public | BindingFlags.Static);
+                _coopPanelStatus = _coopSteamNetType.GetProperty("PanelStatus", BindingFlags.Public | BindingFlags.Static);
+                _coopSteamReady = _coopSteamNetType.GetProperty("SteamReady", BindingFlags.Public | BindingFlags.Static);
 
                 LastStatusMessage = "IronNestCoop verbunden (Bereit)";
                 return;
@@ -138,7 +143,11 @@ namespace IronXNestCommand.Steam
                 _mGetLobbyMemberByIndex = _steamMatchmakingType.GetMethod("GetLobbyMemberByIndex", BindingFlags.Public | BindingFlags.Static);
 
                 if (_steamFriendsType != null)
+                {
                     _mGetFriendPersonaName = _steamFriendsType.GetMethod("GetFriendPersonaName", BindingFlags.Public | BindingFlags.Static);
+                    _mActivateGameOverlayInviteDialog = _steamFriendsType.GetMethod("ActivateGameOverlayInviteDialog", BindingFlags.Public | BindingFlags.Static)
+                                                     ?? _steamFriendsType.GetMethod("ActivateGameOverlay", BindingFlags.Public | BindingFlags.Static);
+                }
 
                 LastStatusMessage = "Steamworks.NET bereit";
             }
@@ -146,6 +155,11 @@ namespace IronXNestCommand.Steam
 
         private static void CheckSteamState()
         {
+            if (!IsIronNestCoopDetected)
+            {
+                ResolveTypes();
+            }
+
             if (IsIronNestCoopDetected && _coopInLobby != null)
             {
                 try
@@ -178,12 +192,20 @@ namespace IronXNestCommand.Steam
                             }
                         }
 
-                        LastStatusMessage = $"Aktiv in Lobby [{CurrentLobbyShort}]";
+                        LastStatusMessage = $"✔ Co-op Aktiv · Code: {CurrentLobbyShort} ({ConnectedPlayers.Count} Spieler)";
                         FairnessGuard.SetMultiplayerState(true);
                     }
                     else
                     {
-                        LastStatusMessage = "Keine aktive Lobby";
+                        string panel = (string)_coopPanelStatus?.GetValue(null);
+                        if (!string.IsNullOrEmpty(panel))
+                        {
+                            LastStatusMessage = panel;
+                        }
+                        else
+                        {
+                            LastStatusMessage = "IronNestCoop bereit (Keine Lobby)";
+                        }
                         FairnessGuard.SetMultiplayerState(false);
                     }
                     return;
@@ -196,7 +218,7 @@ namespace IronXNestCommand.Steam
 
             if (!IsSteamAvailable)
             {
-                LastStatusMessage = "Steamworks nicht verfügbar (Offline)";
+                LastStatusMessage = "Steam nicht verfügbar (Offline / Stub)";
                 return;
             }
 
@@ -211,7 +233,7 @@ namespace IronXNestCommand.Steam
             try
             {
                 if (_mGetNumLobbyMembers == null || _cSteamIDType == null) return;
-                object lobbyIdBoxed = Activator.CreateInstance(_cSteamIDType, CurrentLobbyId);
+                object lobbyIdBoxed = MakeSteamID(CurrentLobbyId);
                 int count = (int)_mGetNumLobbyMembers.Invoke(null, new[] { lobbyIdBoxed });
 
                 ConnectedPlayers.Clear();
@@ -234,36 +256,50 @@ namespace IronXNestCommand.Steam
 
         public static void TryCreateLobby(int maxPlayers = 4)
         {
+            if (!IsIronNestCoopDetected)
+            {
+                ResolveTypes();
+            }
+
             if (IsIronNestCoopDetected && _coopCreateLobby != null)
             {
                 try
                 {
                     _coopCreateLobby.Invoke(null, null);
-                    LastStatusMessage = "⏳ Erstelle IronNestCoop-Lobby...";
+                    LastStatusMessage = "⏳ Erstelle Co-op Lobby...";
                     MelonLogger.Msg("[SteamworksDetector] IronNestCoop CreateLobby aufgerufen.");
+                    CheckSteamState();
                     return;
                 }
                 catch (Exception ex)
                 {
                     LastStatusMessage = $"❌ Fehler: {ex.Message}";
+                    MelonLogger.Warning($"[SteamworksDetector] CreateLobby Fehler: {ex}");
                     return;
                 }
             }
 
             if (!IsSteamAvailable || _mCreateLobby == null)
             {
-                LastStatusMessage = "❌ Steamworks nicht verfügbar.";
+                LastStatusMessage = "❌ Steam / Co-op Mod nicht verfügbar.";
                 return;
             }
 
             try
             {
-                _mCreateLobby.Invoke(null, new object[] { 2, maxPlayers });
+                Type eLobbyType = _steamMatchmakingType?.Assembly.GetType("Steamworks.ELobbyType")
+                               ?? Type.GetType("Steamworks.ELobbyType, Steamworks.NET")
+                               ?? Type.GetType("Steamworks.ELobbyType, com.rlabrecque.steamworks.net");
+                object lobbyTypeValue = eLobbyType != null ? Enum.ToObject(eLobbyType, 2) : 2;
+
+                _mCreateLobby.Invoke(null, new object[] { lobbyTypeValue, maxPlayers });
                 LastStatusMessage = $"⏳ Erstelle Lobby für {maxPlayers} Spieler...";
+                MelonLogger.Msg($"[SteamworksDetector] SteamMatchmaking.CreateLobby für {maxPlayers} Spieler aufgerufen.");
             }
             catch (Exception ex)
             {
                 LastStatusMessage = $"❌ Fehler beim Erstellen: {ex.Message}";
+                MelonLogger.Warning($"[SteamworksDetector] Fehler beim Erstellen der Steam-Lobby: {ex.Message}");
             }
         }
 
@@ -336,13 +372,15 @@ namespace IronXNestCommand.Steam
 
             try
             {
-                object lobbyIdBoxed = Activator.CreateInstance(_cSteamIDType, lobbyId);
+                object lobbyIdBoxed = MakeSteamID(lobbyId);
                 _mJoinLobby.Invoke(null, new[] { lobbyIdBoxed });
                 LastStatusMessage = $"⏳ Trete Lobby {lobbyId} bei...";
+                MelonLogger.Msg($"[SteamworksDetector] SteamMatchmaking.JoinLobby aufgerufen (ID: {lobbyId}).");
             }
             catch (Exception ex)
             {
                 LastStatusMessage = $"❌ Fehler beim Beitreten: {ex.Message}";
+                MelonLogger.Warning($"[SteamworksDetector] Fehler beim Beitreten zu Lobby {lobbyId}: {ex.Message}");
             }
         }
 
@@ -364,7 +402,7 @@ namespace IronXNestCommand.Steam
             {
                 try
                 {
-                    object lobbyIdBoxed = Activator.CreateInstance(_cSteamIDType, CurrentLobbyId);
+                    object lobbyIdBoxed = MakeSteamID(CurrentLobbyId);
                     _mLeaveLobby.Invoke(null, new[] { lobbyIdBoxed });
                     LastStatusMessage = "Lobby verlassen.";
                 }
@@ -390,12 +428,28 @@ namespace IronXNestCommand.Steam
 
         public static bool TryOpenInviteOverlay()
         {
+            if (!IsSteamAvailable) return false;
             try
             {
-                Type steamFriends = _steamFriendsType;
-                if (steamFriends != null)
+                if (_mActivateGameOverlayInviteDialog != null && CurrentLobbyId != 0)
                 {
-                    var mActivateGameOverlay = steamFriends.GetMethod("ActivateGameOverlay", BindingFlags.Public | BindingFlags.Static);
+                    var pars = _mActivateGameOverlayInviteDialog.GetParameters();
+                    if (pars.Length == 1 && pars[0].ParameterType.Name.Contains("CSteamID"))
+                    {
+                        object steamLobbyId = MakeSteamID(CurrentLobbyId);
+                        _mActivateGameOverlayInviteDialog.Invoke(null, new object[] { steamLobbyId });
+                        return true;
+                    }
+                    else if (pars.Length == 1 && pars[0].ParameterType == typeof(string))
+                    {
+                        _mActivateGameOverlayInviteDialog.Invoke(null, new object[] { "LobbyInvite" });
+                        return true;
+                    }
+                }
+
+                if (_steamFriendsType != null)
+                {
+                    var mActivateGameOverlay = _steamFriendsType.GetMethod("ActivateGameOverlay", BindingFlags.Public | BindingFlags.Static);
                     if (mActivateGameOverlay != null)
                     {
                         mActivateGameOverlay.Invoke(null, new object[] { "LobbyInvite" });
@@ -405,6 +459,18 @@ namespace IronXNestCommand.Steam
             }
             catch { }
             return false;
+        }
+
+        private static object MakeSteamID(ulong id)
+        {
+            if (_cSteamIDType == null) return id;
+            try
+            {
+                var ctor = _cSteamIDType.GetConstructor(new[] { typeof(ulong) });
+                if (ctor != null) return ctor.Invoke(new object[] { id });
+                return Activator.CreateInstance(_cSteamIDType, id);
+            }
+            catch { return id; }
         }
     }
 }

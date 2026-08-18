@@ -26,8 +26,8 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static Vector2 _dragOffset = Vector2.zero;
 
         // ── Tabs ───────────────────────────────────────────────────────────────
-        private static int _activeTab = 0; // 0 = Lobby & Besatzung, 1 = Einstellungen
-        private static readonly string[] TabNames = { "🌐 LOBBY & BESATZUNG", "⚙️ EINSTELLUNGEN" };
+        private static int _activeTab = 0; // 0 = Home / Lobby & Besatzung, 1 = Einstellungen
+        private static readonly string[] TabNames = { "🏠 HOME / LOBBY", "⚙️ EINSTELLUNGEN" };
 
         // ── State & Animations ─────────────────────────────────────────────────
         private static string _lobbyIdInput = "";
@@ -55,6 +55,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         private static Texture2D _texBorderLight;
         private static Texture2D _texDotGreen;
         private static Texture2D _texDotGrey;
+        private static Texture2D _texCursor;
 
         // ── GUIStyles (100% IL2CPP-kompatibel) ──────────────────────────────────
         private static GUIStyle _titleStyle;
@@ -80,6 +81,13 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
 
         private void Awake()
         {
+            try
+            {
+                DontDestroyOnLoad(gameObject);
+                gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+            catch { }
+
             Config = Plugin.Instance?.ConfigData ?? new ModConfig();
             SetVisible(Config.StartVisible);
             AudioFeedback.Initialize();
@@ -90,6 +98,12 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         {
             if (CheckToggleKey())
                 SetVisible(!IsVisible);
+
+            if (IsVisible)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
 
             float dt = Time.unscaledDeltaTime;
             _pulseTimer += dt * 3f;
@@ -119,6 +133,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             }
 
             SteamworksDetector.Update(dt);
+            TurretTelemetry.Update();
             CoopPunchcardFix.UpdateWatchdog(dt);
             EnemyDespawnGuard.UpdateWatchdog(dt);
         }
@@ -129,19 +144,39 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             _notificationTimer = duration;
         }
 
-        // Der Turret-Simulator sperrt die Maus fürs Zielen (Cursor.lockState = Locked);
-        // ohne dies freizugeben, kommen Klicks auf die Overlay-Buttons nie an.
+        // Beim Öffnen geben wir den Cursor frei (CursorLockMode.None & visible = true).
+        // Beim Schließen erzwingen wir kein CursorLockMode.Locked, damit der Mauszeiger in
+        // Menüs, Hangar und Lobby frei beweglich bleibt und nicht 'stuck' wird.
         private static void SetVisible(bool visible)
         {
             IsVisible = visible;
-            Cursor.lockState = visible ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = visible;
+            if (visible)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
         }
 
         private void OnGUI()
         {
+            // Event check for F8 / ToggleKey keypress in IMGUI event stream
+            if (Event.current != null && Event.current.isKey && Event.current.type == EventType.KeyDown)
+            {
+                KeyCode targetKey = KeyCode.F8;
+                if (!string.IsNullOrEmpty(Config.ToggleKey) && Enum.TryParse<KeyCode>(Config.ToggleKey, true, out var parsedKey))
+                    targetKey = parsedKey;
+
+                if (Event.current.keyCode == targetKey || Event.current.keyCode == KeyCode.F8)
+                {
+                    SetVisible(!IsVisible);
+                    Event.current.Use();
+                    return;
+                }
+            }
+
             if (!IsVisible) return;
 
+            GUI.depth = -1000;
             EnsureStyles();
 
             var currentEvent = Event.current;
@@ -214,17 +249,28 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 DrawBox(new Rect(bannerX, bannerY, bannerW, 26), _texTerracotta, Color.white);
                 GUI.Label(new Rect(bannerX + 10, bannerY + 4, bannerW - 20, 18), _notificationText, _notificationStyle);
             }
+
+            // 6. On-Top Cursor (sorgt dafür, dass der Zeiger immer sichtbar über dem Overlay schwebt)
+            if (_texCursor != null && Event.current != null)
+            {
+                Vector2 mp = Event.current.mousePosition;
+                GUI.DrawTexture(new Rect(mp.x, mp.y, 16, 17), _texCursor);
+            }
         }
 
         // ==================== HEADER BAR ====================
         private static void DrawHeader(float wx, float wy, float ww)
         {
-            // Accent Terracotta Icon (26x26 mit innerem Kreis)
-            DrawBox(new Rect(wx + 18, wy + 12, 26, 26), _texTerracotta, new Color(0.851f, 0.467f, 0.341f, 1f));
-            DrawBox(new Rect(wx + 25, wy + 19, 12, 12), _texMasterBg, new Color(0.094f, 0.094f, 0.106f, 1f));
+            // 🏠 Home Icon Button (28x28)
+            if (DrawButton(new Rect(wx + 16, wy + 11, 28, 28), "🏠", _activeTab == 0 ? _btnTerracottaStyle : _btnDarkStyle))
+            {
+                _activeTab = 0;
+                _joinInputMode = false;
+                AudioFeedback.PlayClick();
+            }
 
-            // Title (Subtitle entfernt — redundant mit den Tab-Labels direkt darunter)
-            GUI.Label(new Rect(wx + 52, wy + 15, 200, 18), "IronXNestCommand", _titleStyle);
+            // Title
+            GUI.Label(new Rect(wx + 50, wy + 15, 180, 18), "IronXNestCommand", _titleStyle);
 
             bool online = SteamworksDetector.IsInLobby;
 
@@ -270,23 +316,26 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (!inLobby && !_joinInputMode)
             {
                 // Unconnected State (Dashed Container)
-                DrawBox(new Rect(x, y, w, 78), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
-                GUI.Label(new Rect(x + 14, y + 10, w - 28, 20), "Noch keine Lobby aktiv. Erzeuge eine Hex-ID oder trete einer Besatzung bei.", _lobbySubtextStyle);
+                DrawBox(new Rect(x, y, w, 82), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
+                string desc = string.IsNullOrEmpty(SteamworksDetector.LastStatusMessage) || SteamworksDetector.LastStatusMessage == "Nicht initialisiert"
+                    ? "Noch keine Lobby aktiv. Erzeuge eine Hex-ID oder trete einer Besatzung bei."
+                    : $"Status: {SteamworksDetector.LastStatusMessage}";
+                GUI.Label(new Rect(x + 14, y + 8, w - 28, 20), desc, _lobbySubtextStyle);
 
                 float btnHalf = (w - 36) / 2f;
-                if (DrawButton(new Rect(x + 14, y + 36, btnHalf, 30), "➕ Lobby-ID generieren", _btnTerracottaStyle))
+                if (DrawButton(new Rect(x + 14, y + 34, btnHalf, 34), "➕ Lobby erstellen", _btnTerracottaStyle))
                 {
                     SteamworksDetector.TryCreateLobby(maxSlots);
                     AudioFeedback.PlayLevelUp();
                     ShowNotification("⏳ Erstelle neue Co-op Lobby...");
                 }
 
-                if (DrawButton(new Rect(x + 22 + btnHalf, y + 36, btnHalf, 30), "📥 Lobby Beitreten", _btnOutlineStyle))
+                if (DrawButton(new Rect(x + 22 + btnHalf, y + 34, btnHalf, 34), "📥 Lobby Beitreten", _btnOutlineStyle))
                 {
                     _joinInputMode = true;
                     AudioFeedback.PlayClick();
                 }
-                y += 88;
+                y += 92;
             }
             else if (!inLobby && _joinInputMode)
             {
@@ -478,11 +527,19 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             Config.SoundFeedbackEnabled = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.SoundFeedbackEnabled, "Audio-Rückmeldung bei Klicks & Aktionen");
 
             y += 204;
-            if (DrawButton(new Rect(x, y, w, 32), "💾 EINSTELLUNGEN SPEICHERN", _btnTerracottaStyle))
+            float halfBtn = (w - 10) / 2f;
+            if (DrawButton(new Rect(x, y, halfBtn, 32), "💾 SPEICHERN", _btnTerracottaStyle))
             {
                 SaveManager.SaveConfig(Config);
                 AudioFeedback.PlaySuccess();
                 ShowNotification("✔ Einstellungen gespeichert!");
+            }
+
+            if (DrawButton(new Rect(x + halfBtn + 10, y, halfBtn, 32), "🏠 ZU HOME", _btnOutlineStyle))
+            {
+                _activeTab = 0;
+                _joinInputMode = false;
+                AudioFeedback.PlayClick();
             }
         }
 
@@ -613,17 +670,72 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             return name.Length >= 2 ? name.Substring(0, 2).ToUpper() : name.ToUpper();
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        private static bool _toggleKeyWasPressed = false;
+
+        private static int KeyCodeToVirtualKey(KeyCode code)
+        {
+            return code switch
+            {
+                KeyCode.F1 => 0x70,
+                KeyCode.F2 => 0x71,
+                KeyCode.F3 => 0x72,
+                KeyCode.F4 => 0x73,
+                KeyCode.F5 => 0x74,
+                KeyCode.F6 => 0x75,
+                KeyCode.F7 => 0x76,
+                KeyCode.F8 => 0x77,
+                KeyCode.F9 => 0x78,
+                KeyCode.F10 => 0x79,
+                KeyCode.F11 => 0x7A,
+                KeyCode.F12 => 0x7B,
+                _ => 0x77
+            };
+        }
+
         private static bool CheckToggleKey()
         {
+            KeyCode targetKey = KeyCode.F8;
+            if (!string.IsNullOrEmpty(Config.ToggleKey) && Enum.TryParse<KeyCode>(Config.ToggleKey, true, out var parsedKey))
+            {
+                targetKey = parsedKey;
+            }
+
+            // 1. Unity Legacy Input
             try
             {
-                if (Input.GetKeyDown(KeyCode.F8)) return true;
-                if (!string.IsNullOrEmpty(Config.ToggleKey) && Enum.TryParse<KeyCode>(Config.ToggleKey, true, out var key))
+                if (Input.GetKeyDown(targetKey) || (targetKey != KeyCode.F8 && Input.GetKeyDown(KeyCode.F8)))
+                    return true;
+            }
+            catch { }
+
+            // 2. Hardware / Win32 GetAsyncKeyState Fallback (Immune to locked cursor & New Input System modes)
+            try
+            {
+                int vk = KeyCodeToVirtualKey(targetKey);
+                bool isDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                if (targetKey != KeyCode.F8 && !isDown)
                 {
-                    if (Input.GetKeyDown(key)) return true;
+                    isDown = (GetAsyncKeyState(0x77) & 0x8000) != 0;
+                }
+
+                if (isDown)
+                {
+                    if (!_toggleKeyWasPressed)
+                    {
+                        _toggleKeyWasPressed = true;
+                        return true;
+                    }
+                }
+                else
+                {
+                    _toggleKeyWasPressed = false;
                 }
             }
             catch { }
+
             return false;
         }
 
@@ -662,6 +774,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             _texBorderLight = MakeColorTexture(colorBorderLight);
             _texDotGreen = MakeColorTexture(colorDotGreen);
             _texDotGrey = MakeColorTexture(colorDotGrey);
+            _texCursor = CreateCursorTexture();
 
             _titleStyle = new GUIStyle { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
             _titleStyle.m_Normal = new GUIStyleState { textColor = textPrimary };
@@ -732,6 +845,60 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             return texture;
         }
 
+        private static readonly string[] CursorBitmap = new string[]
+        {
+            "X               ",
+            "XX              ",
+            "X.X             ",
+            "X..X            ",
+            "X...X           ",
+            "X....X          ",
+            "X.....X         ",
+            "X......X        ",
+            "X.......X       ",
+            "X........X      ",
+            "X.....XXXXX     ",
+            "X..X..X         ",
+            "X.X X..X        ",
+            "XX  X..X        ",
+            "X    X..X       ",
+            "     X..X       ",
+            "      XX        "
+        };
+
+        private static Texture2D CreateCursorTexture()
+        {
+            int height = CursorBitmap.Length;
+            int width = CursorBitmap[0].Length;
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Point,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            var dark = new Color(0.094f, 0.094f, 0.110f, 1.0f);
+            var light = new Color(1.0f, 1.0f, 1.0f, 1.0f);
+
+            for (int y = 0; y < height; y++)
+            {
+                string row = CursorBitmap[y];
+                for (int x = 0; x < width; x++)
+                {
+                    char c = x < row.Length ? row[x] : ' ';
+                    Color col = c switch
+                    {
+                        'X' => dark,
+                        '.' => light,
+                        _ => Color.clear
+                    };
+                    tex.SetPixel(x, height - 1 - y, col);
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
         private void OnDestroy()
         {
             if (_texMasterBg != null) Destroy(_texMasterBg);
@@ -745,6 +912,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (_texBorderLight != null) Destroy(_texBorderLight);
             if (_texDotGreen != null) Destroy(_texDotGreen);
             if (_texDotGrey != null) Destroy(_texDotGrey);
+            if (_texCursor != null) Destroy(_texCursor);
         }
     }
 }

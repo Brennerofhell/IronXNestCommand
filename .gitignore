@@ -7,3 +7,6 @@ obj/
 UserData/
 *.log
 tools/dotnet-sdk/
+dist/
+/*.dll
+/*.exe

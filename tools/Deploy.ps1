@@ -42,6 +42,10 @@ $coreOut = Join-Path $root 'IronXNestCommand.Core\bin\Release'
 Copy-Item (Join-Path $hostOut 'IronXNestCommand.dll') $plugins -Force
 Copy-Item (Join-Path $coreOut 'IronXNestCommand.Core.dll') $plugins -Force
 
+$coopDll = Join-Path $root 'tools\extracted_coop\IronNestCoop.Core.dll'
+if (Test-Path $coopDll) {
+    Copy-Item $coopDll $plugins -Force
+}
+
 Write-Host "Deployed to $plugins"
-Get-Item (Join-Path $plugins 'IronXNestCommand.dll'), (Join-Path $plugins 'IronXNestCommand.Core.dll') |
-    Format-Table Name, Length, LastWriteTime -AutoSize
+Get-ChildItem $plugins | Format-Table Name, Length, LastWriteTime -AutoSize
