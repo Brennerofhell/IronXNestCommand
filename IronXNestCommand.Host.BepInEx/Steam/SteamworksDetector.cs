@@ -74,6 +74,31 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
         private static void ResolveTypes()
         {
+            // 0. Suche und lade ggf. IronNestCoop.Core.dll von der Festplatte falls noch nicht im AppDomain geladen
+            if (_coopSteamNetType == null)
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] candidatePaths = {
+                    System.IO.Path.Combine(baseDir, "BepInEx", "plugins", "IronNestCoop.Core.dll"),
+                    System.IO.Path.Combine(baseDir, "Mods", "IronNestCoop.Core.dll"),
+                    System.IO.Path.Combine(baseDir, "UserLibs", "IronNestCoop.Core.dll"),
+                    System.IO.Path.Combine(baseDir, "Plugins", "IronNestCoop.Core.dll"),
+                    System.IO.Path.Combine(baseDir, "IronNestCoop.Core.dll")
+                };
+                foreach (var path in candidatePaths)
+                {
+                    if (System.IO.File.Exists(path))
+                    {
+                        try
+                        {
+                            Assembly.LoadFrom(path);
+                            break;
+                        }
+                        catch { }
+                    }
+                }
+            }
+
             // 1. Suche nach IronNestCoop.Core.Net.SteamNet
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -115,13 +140,28 @@ namespace IronXNestCommand.Host.BepInEx.Steam
             }
 
             // 2. Fallback: Generic Steamworks
-            string[] steamAssemblies = { "Steamworks.NET", "Assembly-CSharp-firstpass", "Assembly-CSharp", "com.rlabrecque.steamworks.net" };
+            string[] steamAssemblies = {
+                "Il2Cppcom.rlabrecque.steamworks.net",
+                "Il2CppHeathen.Steamworks",
+                "Steamworks.NET",
+                "Assembly-CSharp-firstpass",
+                "Assembly-CSharp",
+                "com.rlabrecque.steamworks.net"
+            };
             foreach (var asmName in steamAssemblies)
             {
-                _steamMatchmakingType ??= Type.GetType($"Steamworks.SteamMatchmaking, {asmName}");
-                _steamFriendsType ??= Type.GetType($"Steamworks.SteamFriends, {asmName}");
-                _steamUserType ??= Type.GetType($"Steamworks.SteamUser, {asmName}");
-                _cSteamIDType ??= Type.GetType($"Steamworks.CSteamID, {asmName}");
+                try
+                {
+                    var asm = Assembly.Load(asmName);
+                    if (asm != null)
+                    {
+                        _steamMatchmakingType ??= asm.GetType("Steamworks.SteamMatchmaking") ?? asm.GetType("Il2CppSteamworks.SteamMatchmaking");
+                        _steamFriendsType ??= asm.GetType("Steamworks.SteamFriends") ?? asm.GetType("Il2CppSteamworks.SteamFriends");
+                        _steamUserType ??= asm.GetType("Steamworks.SteamUser") ?? asm.GetType("Il2CppSteamworks.SteamUser");
+                        _cSteamIDType ??= asm.GetType("Steamworks.CSteamID") ?? asm.GetType("Il2CppSteamworks.CSteamID");
+                    }
+                }
+                catch { }
             }
 
             if (_steamMatchmakingType == null)
@@ -130,10 +170,10 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 {
                     try
                     {
-                        _steamMatchmakingType ??= asm.GetType("Steamworks.SteamMatchmaking");
-                        _steamFriendsType ??= asm.GetType("Steamworks.SteamFriends");
-                        _steamUserType ??= asm.GetType("Steamworks.SteamUser");
-                        _cSteamIDType ??= asm.GetType("Steamworks.CSteamID");
+                        _steamMatchmakingType ??= asm.GetType("Steamworks.SteamMatchmaking") ?? asm.GetType("Il2CppSteamworks.SteamMatchmaking");
+                        _steamFriendsType ??= asm.GetType("Steamworks.SteamFriends") ?? asm.GetType("Il2CppSteamworks.SteamFriends");
+                        _steamUserType ??= asm.GetType("Steamworks.SteamUser") ?? asm.GetType("Il2CppSteamworks.SteamUser");
+                        _cSteamIDType ??= asm.GetType("Steamworks.CSteamID") ?? asm.GetType("Il2CppSteamworks.CSteamID");
                     }
                     catch { }
                 }

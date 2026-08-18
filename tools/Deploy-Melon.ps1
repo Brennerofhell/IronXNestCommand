@@ -59,3 +59,12 @@ if (Test-Path $outputDll) {
 } else {
     Write-Warning "Could not locate output DLL at: $outputDll"
 }
+
+$coopSource = Join-Path $root 'tools\extracted_coop\IronNestCoop.Core.dll'
+if (Test-Path $coopSource) {
+    Copy-Item $coopSource $modsFolder -Force
+    $userLibs = Join-Path $game 'UserLibs'
+    if (-not (Test-Path $userLibs)) { New-Item -ItemType Directory -Path $userLibs -Force | Out-Null }
+    Copy-Item $coopSource $userLibs -Force
+    Write-Host "[DEPLOY] Copied IronNestCoop.Core.dll to Mods/ and UserLibs/" -ForegroundColor Green
+}

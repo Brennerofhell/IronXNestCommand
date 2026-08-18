@@ -27,7 +27,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
 
         // ── Tabs ───────────────────────────────────────────────────────────────
         private static int _activeTab = 0; // 0 = Home / Lobby & Besatzung, 1 = Einstellungen
-        private static readonly string[] TabNames = { "🏠 HOME / LOBBY", "⚙️ EINSTELLUNGEN" };
+        private static readonly string[] TabNames = { "HOME / LOBBY", "EINSTELLUNGEN" };
 
         // ── State & Animations ─────────────────────────────────────────────────
         private static string _lobbyIdInput = "";
@@ -261,8 +261,8 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
         // ==================== HEADER BAR ====================
         private static void DrawHeader(float wx, float wy, float ww)
         {
-            // 🏠 Home Icon Button (28x28)
-            if (DrawButton(new Rect(wx + 16, wy + 11, 28, 28), "🏠", _activeTab == 0 ? _btnTerracottaStyle : _btnDarkStyle))
+            // Home Icon Button (28x28)
+            if (DrawButton(new Rect(wx + 16, wy + 11, 28, 28), "H", _activeTab == 0 ? _btnTerracottaStyle : _btnDarkStyle))
             {
                 _activeTab = 0;
                 _joinInputMode = false;
@@ -289,8 +289,8 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             // Hotkey Hint [F8]
             GUI.Label(new Rect(wx + ww - 52, wy + 17, 24, 16), Config.ToggleKey ?? "F8", _hotkeyStyle);
 
-            // Close Button [✕]
-            if (DrawButton(new Rect(wx + ww - 28, wy + 14, 20, 20), "✕", _btnDarkStyle))
+            // Close Button [X]
+            if (DrawButton(new Rect(wx + ww - 28, wy + 14, 20, 20), "X", _btnDarkStyle))
             {
                 SetVisible(false);
                 AudioFeedback.PlayClick();
@@ -323,14 +323,14 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 GUI.Label(new Rect(x + 14, y + 8, w - 28, 20), desc, _lobbySubtextStyle);
 
                 float btnHalf = (w - 36) / 2f;
-                if (DrawButton(new Rect(x + 14, y + 34, btnHalf, 34), "➕ Lobby erstellen", _btnTerracottaStyle))
+                if (DrawButton(new Rect(x + 14, y + 34, btnHalf, 34), "+ Lobby erstellen", _btnTerracottaStyle))
                 {
                     SteamworksDetector.TryCreateLobby(maxSlots);
                     AudioFeedback.PlayLevelUp();
-                    ShowNotification("⏳ Erstelle neue Co-op Lobby...");
+                    ShowNotification("Erstelle neue Co-op Lobby...");
                 }
 
-                if (DrawButton(new Rect(x + 22 + btnHalf, y + 34, btnHalf, 34), "📥 Lobby Beitreten", _btnOutlineStyle))
+                if (DrawButton(new Rect(x + 22 + btnHalf, y + 34, btnHalf, 34), "> Lobby Beitreten", _btnOutlineStyle))
                 {
                     _joinInputMode = true;
                     AudioFeedback.PlayClick();
@@ -346,14 +346,14 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 DrawBox(new Rect(x + 14, y + 28, w - 170, 28), _texMasterBg, new Color(0.820f, 0.800f, 0.765f, 1f));
                 _lobbyIdInput = GUI.TextField(new Rect(x + 20, y + 30, w - 182, 24), _lobbyIdInput ?? "", 32, _inputFieldStyle ?? _memberNameStyle);
 
-                if (DrawButton(new Rect(x + w - 150, y + 28, 64, 28), "📋 Paste", _btnOutlineStyle))
+                if (DrawButton(new Rect(x + w - 150, y + 28, 64, 28), "Paste", _btnOutlineStyle))
                 {
                     string clip = GUIUtility.systemCopyBuffer?.Trim() ?? "";
                     if (!string.IsNullOrEmpty(clip))
                     {
                         _lobbyIdInput = clip;
                         AudioFeedback.PlayClick();
-                        ShowNotification($"📋 Code eingefügt: {clip}");
+                        ShowNotification($"Code eingefuegt: {clip}");
                     }
                 }
 
@@ -374,11 +374,12 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 if (submitJoin && hasInput)
                 {
                     SteamworksDetector.TryJoinLobby(_lobbyIdInput);
-                    AudioFeedback.PlayClick();
-                    ShowNotification($"⏳ Trete '{_lobbyIdInput.Trim()}' bei...");
+                    AudioFeedback.PlayLevelUp();
+                    ShowNotification($"Verbinde mit: {_lobbyIdInput}");
+                    _joinInputMode = false;
                 }
 
-                if (DrawButton(new Rect(x + 14, y + 60, 100, 18), "← Zurück", _btnDarkStyle))
+                if (DrawButton(new Rect(x + 14, y + 60, 100, 18), "Abbrechen", _btnDarkStyle))
                 {
                     _joinInputMode = false;
                     AudioFeedback.PlayClick();
@@ -390,10 +391,10 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 // Active Lobby State (Large Hex-ID + Kopieren + Einladen)
                 float boxH = 44;
                 DrawBox(new Rect(x, y, w - 180, boxH), _texCardBg, new Color(0.820f, 0.800f, 0.765f, 1f));
-                GUI.Label(new Rect(x + 14, y + 10, w - 240, 24), string.IsNullOrEmpty(formattedCode) ? "· · · ·" : formattedCode, _lobbyCodeStyle);
+                GUI.Label(new Rect(x + 14, y + 10, w - 240, 24), string.IsNullOrEmpty(formattedCode) ? "- - - -" : formattedCode, _lobbyCodeStyle);
                 GUI.Label(new Rect(x + w - 230, y + 14, 45, 16), "Hex-ID", _subtitleStyle);
 
-                string copyLabel = _copiedFeedback ? "✔ Kopiert" : "Kopieren";
+                string copyLabel = _copiedFeedback ? "Kopiert!" : "Kopieren";
                 if (DrawButton(new Rect(x + w - 172, y, 84, boxH), copyLabel, _btnTerracottaStyle))
                 {
                     string toCopy = !string.IsNullOrEmpty(rawShort) ? rawShort : (SteamworksDetector.CurrentLobbyId != 0 ? SteamworksDetector.CurrentLobbyId.ToString() : formattedCode);
@@ -401,32 +402,32 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                     _copiedFeedback = true;
                     _copiedTimer = 1.8f;
                     AudioFeedback.PlaySuccess();
-                    ShowNotification("✔ Lobby-Code in Zwischenablage kopiert!");
+                    ShowNotification("Lobby-Code in Zwischenablage kopiert!");
                 }
 
                 if (DrawButton(new Rect(x + w - 82, y, 82, boxH), "Einladen", _btnOutlineStyle))
                 {
                     if (SteamworksDetector.TryOpenInviteOverlay())
                     {
-                        ShowNotification("👥 Steam Einladungs-Overlay geöffnet!");
+                        ShowNotification("Steam Einladungs-Overlay geoeffnet!");
                     }
                     else
                     {
                         string toCopy = !string.IsNullOrEmpty(rawShort) ? rawShort : (SteamworksDetector.CurrentLobbyId != 0 ? SteamworksDetector.CurrentLobbyId.ToString() : formattedCode);
                         GUIUtility.systemCopyBuffer = toCopy;
-                        ShowNotification($"✔ Code '{toCopy}' kopiert!");
+                        ShowNotification($"Code '{toCopy}' kopiert!");
                     }
                     AudioFeedback.PlayClick();
                 }
 
                 y += boxH + 6;
-                GUI.Label(new Rect(x, y, w - 90, 16), "Code an deine Besatzung weitergeben. Beitritt erfolgt direkt über das Steam-Overlay.", _lobbySubtextStyle);
+                GUI.Label(new Rect(x, y, w - 90, 16), "Code an deine Besatzung weitergeben. Beitritt erfolgt direkt ueber das Steam-Overlay.", _lobbySubtextStyle);
 
-                if (DrawButton(new Rect(x + w - 82, y - 2, 82, 20), "🚪 Verlassen", _btnDarkStyle))
+                if (DrawButton(new Rect(x + w - 82, y - 2, 82, 20), "Verlassen", _btnDarkStyle))
                 {
                     SteamworksDetector.TryLeaveLobby();
                     AudioFeedback.PlayClick();
-                    ShowNotification("🚪 Lobby verlassen.");
+                    ShowNotification("Lobby verlassen.");
                 }
                 y += 24;
             }
@@ -446,7 +447,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             if (players.Count == 0 && !inLobby)
             {
                 // Offline / Einzelspieler Slot
-                DrawMemberCard(x, y, w, "Du (Operator)", "HM", "👑 Kommandant (Lokal) · 0 ms", isHost: true);
+                DrawMemberCard(x, y, w, "Du (Operator)", "HM", "Kommandant (Lokal) · 0 ms", isHost: true);
                 y += 44;
             }
             else
@@ -455,7 +456,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 {
                     string pName = players[i];
                     string initials = GetInitials(pName);
-                    string role = i == 0 ? "👑 Kommandant (Host) · 28 ms" : (i == 1 ? "🎯 Richtschütze · 34 ms" : (i == 2 ? "📦 Ladeschütze · 45 ms" : "🔭 Beobachter · 39 ms"));
+                    string role = i == 0 ? "Kommandant (Host) · 28 ms" : (i == 1 ? "Richtschuetze · 34 ms" : (i == 2 ? "Ladeschuetze · 45 ms" : "Beobachter · 39 ms"));
                     DrawMemberCard(x, y, w, pName, initials, role, isHost: (i == 0));
                     y += 44;
                 }
@@ -473,7 +474,7 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             y += 4;
 
             // ── 3. RE-SYNC ACTION ROW ───────────────────────────────────────────
-            string resyncLabel = _syncing ? "⏳ Synchronisiere …" : "🔄 Besatzung re-syncen";
+            string resyncLabel = _syncing ? "Synchronisiere..." : "Besatzung re-syncen";
             if (DrawButton(new Rect(x, y, 170, 32), resyncLabel, _btnOutlineStyle))
             {
                 _syncing = true;
@@ -481,11 +482,11 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                 AmmoRequisitionBridge.TriggerCoopResync();
                 PunchcardSpawner.EnsureGuestFireMissionCard();
                 AudioFeedback.PlaySuccess();
-                ShowNotification("🔄 Lochkarten & Raum-Sync ausgeführt!");
+                ShowNotification("Lochkarten & Raum-Sync ausgefuehrt!");
             }
 
             float secondsAgo = _lastSyncTime > 0 ? (Time.unscaledTime - _lastSyncTime) : 4f;
-            string stampText = _syncing ? "…" : $"Sync vor {Mathf.Max(1, (int)secondsAgo)} s";
+            string stampText = _syncing ? "..." : $"Sync vor {Mathf.Max(1, (int)secondsAgo)} s";
             GUI.Label(new Rect(x + w - 120, y + 8, 120, 16), stampText, _hotkeyStyle);
         }
 
@@ -511,29 +512,29 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
                     _ => "F8"
                 };
                 AudioFeedback.PlayClick();
-                ShowNotification($"Hotkey geändert auf: {Config.ToggleKey}");
+                ShowNotification($"Hotkey geaendert auf: {Config.ToggleKey}");
             }
             GUI.Label(new Rect(x + 285, iy, 140, 22), "(Klick zum Wechseln)", _lobbySubtextStyle);
 
             iy += 36;
-            Config.PreventEnemyDespawn = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.PreventEnemyDespawn, "🛡️ Culling-Schutz (Verhindert 3D-Despawn)");
+            Config.PreventEnemyDespawn = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.PreventEnemyDespawn, "Culling-Schutz (Verhindert 3D-Despawn)");
 
             iy += 32;
-            Config.StartVisible = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.StartVisible, "Lobbymenü beim Spielstart direkt anzeigen");
+            Config.StartVisible = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.StartVisible, "Lobbymenue beim Spielstart direkt anzeigen");
 
             iy += 32;
-            Config.SoundFeedbackEnabled = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.SoundFeedbackEnabled, "Audio-Rückmeldung bei Klicks & Aktionen");
+            Config.SoundFeedbackEnabled = DrawToggle(new Rect(x + 14, iy, w - 28, 22), Config.SoundFeedbackEnabled, "Audio-Rueckmeldung bei Klicks & Aktionen");
 
             y += 204;
             float halfBtn = (w - 10) / 2f;
-            if (DrawButton(new Rect(x, y, halfBtn, 32), "💾 SPEICHERN", _btnTerracottaStyle))
+            if (DrawButton(new Rect(x, y, halfBtn, 32), "SPEICHERN", _btnTerracottaStyle))
             {
                 SaveManager.SaveConfig(Config);
                 AudioFeedback.PlaySuccess();
-                ShowNotification("✔ Einstellungen gespeichert!");
+                ShowNotification("Einstellungen gespeichert!");
             }
 
-            if (DrawButton(new Rect(x + halfBtn + 10, y, halfBtn, 32), "🏠 ZU HOME", _btnOutlineStyle))
+            if (DrawButton(new Rect(x + halfBtn + 10, y, halfBtn, 32), "ZU HOME", _btnOutlineStyle))
             {
                 _activeTab = 0;
                 _joinInputMode = false;
