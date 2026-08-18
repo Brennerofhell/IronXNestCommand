@@ -33,6 +33,8 @@ namespace IronXNestCommand.Steam
         private static PropertyInfo _coopLocalPlayerName;
         private static PropertyInfo _coopPanelStatus;
         private static PropertyInfo _coopSteamReady;
+        private static FieldInfo _coopPipeField;
+        private static MethodInfo _coopActivateInviteDialog;
 
         // Generic Steamworks Reflection Cache
         private static Type _steamMatchmakingType;
@@ -103,6 +105,13 @@ namespace IronXNestCommand.Steam
                 _coopLocalPlayerName = _coopSteamNetType.GetProperty("LocalPlayerName", BindingFlags.Public | BindingFlags.Static);
                 _coopPanelStatus = _coopSteamNetType.GetProperty("PanelStatus", BindingFlags.Public | BindingFlags.Static);
                 _coopSteamReady = _coopSteamNetType.GetProperty("SteamReady", BindingFlags.Public | BindingFlags.Static);
+
+                _coopPipeField = _coopSteamNetType.GetField("_pipe", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                if (_coopPipeField != null)
+                {
+                    var pipeType = _coopPipeField.FieldType;
+                    _coopActivateInviteDialog = pipeType.GetMethod("ActivateInviteDialog", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                }
 
                 LastStatusMessage = "IronNestCoop verbunden (Bereit)";
                 return;
@@ -428,15 +437,47 @@ namespace IronXNestCommand.Steam
 
         public static bool TryOpenInviteOverlay()
         {
-            if (!IsSteamAvailable) return false;
+            if (CurrentLobbyId == 0)
+            {
+                CheckSteamState();
+            }
+
+            ulong lobbyId = CurrentLobbyId;
+            if (lobbyId == 0 && _coopCurrentLobbyId != null)
+            {
+                try { lobbyId = (ulong)_coopCurrentLobbyId.GetValue(null); } catch { }
+            }
+
+            if (lobbyId == 0) return false;
+
+            // 1. Primärer Pfad: Über IronNestCoop SteamPipe
+            if (_coopPipeField != null && _coopActivateInviteDialog != null)
+            {
+                try
+                {
+                    object pipeInstance = _coopPipeField.GetValue(null);
+                    if (pipeInstance != null)
+                    {
+                        _coopActivateInviteDialog.Invoke(pipeInstance, new object[] { lobbyId });
+                        MelonLogger.Msg($"[SteamworksDetector] Steam-Einladungs-Dialog für Lobby {lobbyId} erfolgreich via SteamPipe geöffnet.");
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MelonLogger.Warning($"[SteamworksDetector] Fehler bei SteamPipe.ActivateInviteDialog: {ex.Message}");
+                }
+            }
+
+            // 2. Sekundärer Pfad: Generic Steamworks.SteamFriends
             try
             {
-                if (_mActivateGameOverlayInviteDialog != null && CurrentLobbyId != 0)
+                if (_mActivateGameOverlayInviteDialog != null)
                 {
                     var pars = _mActivateGameOverlayInviteDialog.GetParameters();
                     if (pars.Length == 1 && pars[0].ParameterType.Name.Contains("CSteamID"))
                     {
-                        object steamLobbyId = MakeSteamID(CurrentLobbyId);
+                        object steamLobbyId = MakeSteamID(lobbyId);
                         _mActivateGameOverlayInviteDialog.Invoke(null, new object[] { steamLobbyId });
                         return true;
                     }
@@ -458,6 +499,7 @@ namespace IronXNestCommand.Steam
                 }
             }
             catch { }
+
             return false;
         }
 
