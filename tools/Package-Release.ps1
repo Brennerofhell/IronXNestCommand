@@ -31,6 +31,12 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+Write-Host "[1b/4] Stelle vendored Modloader-Runtimes sicher (BepInEx + MelonLoader)..." -ForegroundColor Yellow
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Fetch-Vendor-Runtimes.ps1")
+$vendorDir = Join-Path $repoRoot "tools\vendor"
+$bepExtractDir   = Join-Path $vendorDir "BepInEx-extracted"
+$melonExtractDir = Join-Path $vendorDir "MelonLoader-extracted"
+
 # 2. Dist-Verzeichnis vorbereiten
 if (Test-Path $tempDir) { Remove-Item -Path $tempDir -Recurse -Force }
 if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir -Force | Out-Null }
@@ -51,6 +57,16 @@ Write-Host "[2/4] Kopiere Release-Dateien..." -ForegroundColor Yellow
 # DLLs kopieren
 Copy-Item (Join-Path $repoRoot "IronXNestCommand.Host.BepInEx\bin\$Configuration\IronXNestCommand.dll") -Destination $tempDir
 Copy-Item (Join-Path $repoRoot "IronXNestCommand.Core\bin\$Configuration\IronXNestCommand.Core.dll") -Destination $tempDir
+
+# Modloader-Runtimes buendeln (BepInEx 6 IL2CPP + MelonLoader) -- damit keine separate
+# Modloader-Installation mehr noetig ist. Siehe THIRD-PARTY-LICENSES.md.
+Copy-Item "$bepExtractDir\*" -Destination $tempDir -Recurse -Force
+Copy-Item "$melonExtractDir\*" -Destination $tempDir -Recurse -Force
+
+New-Item -ItemType Directory -Force -Path (Join-Path $tempDir "Licenses") | Out-Null
+Copy-Item (Join-Path $repoRoot "Licenses\LICENSE-BepInEx.txt") -Destination (Join-Path $tempDir "Licenses")
+Copy-Item (Join-Path $repoRoot "Licenses\LICENSE-MelonLoader.txt") -Destination (Join-Path $tempDir "Licenses")
+Copy-Item (Join-Path $repoRoot "THIRD-PARTY-LICENSES.md") -Destination $tempDir
 
 # Skripte kopieren
 Copy-Item (Join-Path $repoRoot "Install-Mod.bat") -Destination $tempDir

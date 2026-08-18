@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -40,7 +41,7 @@ namespace IronXNestCommand.Installer
         public static readonly Color cBorderLight = Color.FromArgb(82, 82, 91); // #52525B
 
         public const string GameExeName = "Iron Nest Heavy Turret Simulator.exe";
-        public const string ModVersion = "0.1.2";
+        public const string ModVersion = "0.1.3";
 
         // Navigation
         private Panel pnlHeader;
@@ -236,6 +237,7 @@ namespace IronXNestCommand.Installer
         private Label lblModStatus;
         private CheckBox chkBep;
         private CheckBox chkMelon;
+        private Label lblLoaderInfo;
         private Button btnInstall;
         private Button btnLaunch;
         private ProgressBar progressBar;
@@ -290,7 +292,7 @@ namespace IronXNestCommand.Installer
             Panel pnlCard = new Panel
             {
                 Location = new Point(4, 72),
-                Size = new Size(580, 140),
+                Size = new Size(580, 172),
                 BackColor = MainForm.cCard
             };
             pnlCard.Paint += (s, e) =>
@@ -348,19 +350,29 @@ namespace IronXNestCommand.Installer
             };
             chkMelon.CheckedChanged += (s, e) => RefreshState();
 
+            lblLoaderInfo = new Label
+            {
+                Text = "",
+                Location = new Point(16, 134),
+                Size = new Size(548, 32),
+                ForeColor = MainForm.cMuted,
+                Font = new Font("Segoe UI", 8.25F)
+            };
+
             pnlCard.Controls.Add(lblGameStatus);
             pnlCard.Controls.Add(lblModStatus);
             pnlCard.Controls.Add(lblLoaderTitle);
             pnlCard.Controls.Add(chkBep);
             pnlCard.Controls.Add(chkMelon);
+            pnlCard.Controls.Add(lblLoaderInfo);
 
             // Install Button
-            btnInstall = CreateStyledBtn("✔ JETZT INSTALLIEREN / AKTUALISIEREN", 4, 225, 580, 46, MainForm.cTerracotta, Color.White);
+            btnInstall = CreateStyledBtn("✔ JETZT INSTALLIEREN / AKTUALISIEREN", 4, 257, 580, 46, MainForm.cTerracotta, Color.White);
             btnInstall.Font = new Font("Segoe UI", 10.5F, FontStyle.Bold);
             btnInstall.Click += BtnInstall_Click;
 
             // Start Game Button
-            btnLaunch = CreateStyledBtn("🎮 Spiel über Steam starten", 4, 280, 580, 36, MainForm.cCardLight, MainForm.cEmerald);
+            btnLaunch = CreateStyledBtn("🎮 Spiel über Steam starten", 4, 312, 580, 36, MainForm.cCardLight, MainForm.cEmerald);
             btnLaunch.Click += (s, e) =>
             {
                 try
@@ -377,7 +389,7 @@ namespace IronXNestCommand.Installer
             // Progress & Log
             progressBar = new ProgressBar
             {
-                Location = new Point(4, 330),
+                Location = new Point(4, 362),
                 Size = new Size(580, 8),
                 Visible = false
             };
@@ -385,7 +397,7 @@ namespace IronXNestCommand.Installer
             lblLog = new Label
             {
                 Text = "Tipp: Im Spiel öffnet die Taste [F8] das Co-op Lobby Menü.",
-                Location = new Point(4, 345),
+                Location = new Point(4, 377),
                 Size = new Size(580, 45),
                 ForeColor = MainForm.cMuted,
                 Font = new Font("Segoe UI", 8.5F)
@@ -455,6 +467,39 @@ namespace IronXNestCommand.Installer
                 lblModStatus.Text = "● Noch nicht installiert";
                 lblModStatus.ForeColor = MainForm.cMuted;
             }
+
+            bool bepLoaderPresent = IsBepInExInstalled(gPath);
+            bool melonLoaderPresent = IsMelonLoaderInstalled(gPath);
+            var infoParts = new System.Collections.Generic.List<string>();
+            if (chkBep.Checked)
+            {
+                infoParts.Add(bepLoaderPresent
+                    ? "BepInEx bereits vorhanden — wird nicht überschrieben."
+                    : "BepInEx 6 IL2CPP wird mitinstalliert (~33 MB, im Paket enthalten).");
+            }
+            if (chkMelon.Checked)
+            {
+                infoParts.Add(melonLoaderPresent
+                    ? "MelonLoader bereits vorhanden — wird nicht überschrieben."
+                    : "MelonLoader wird mitinstalliert (~19 MB, im Paket enthalten).");
+            }
+            lblLoaderInfo.Text = string.Join("  ·  ", infoParts.ToArray());
+        }
+
+        // Best-Effort-Erkennung: reicht, um "Loader fehlt komplett" zuverlässig zu erkennen,
+        // ohne jede BepInEx-Version pixelgenau zu validieren.
+        private static bool IsBepInExInstalled(string gamePath)
+        {
+            if (File.Exists(Path.Combine(gamePath, "winhttp.dll"))) return true;
+            if (File.Exists(Path.Combine(gamePath, "doorstop_config.ini"))) return true;
+            string core = Path.Combine(gamePath, "BepInEx", "core");
+            return Directory.Exists(core) && Directory.GetFiles(core, "*.dll").Length > 0;
+        }
+
+        private static bool IsMelonLoaderInstalled(string gamePath)
+        {
+            string mlDir = Path.Combine(gamePath, "MelonLoader");
+            return Directory.Exists(mlDir) && Directory.GetFileSystemEntries(mlDir).Length > 0;
         }
 
         private void BtnInstall_Click(object sender, EventArgs e)
@@ -464,7 +509,7 @@ namespace IronXNestCommand.Installer
             {
                 btnInstall.Enabled = false;
                 progressBar.Visible = true;
-                progressBar.Value = 30;
+                progressBar.Value = 20;
                 lblLog.Text = "Kopiere Dateien in Zielordner...";
                 lblLog.ForeColor = MainForm.cText;
 
@@ -473,6 +518,14 @@ namespace IronXNestCommand.Installer
 
                 if (chkBep.Checked)
                 {
+                    if (!IsBepInExInstalled(gPath))
+                    {
+                        lblLog.Text = "Installiere BepInEx 6 IL2CPP Runtime...";
+                        Application.DoEvents();
+                        ExtractEmbeddedZip(asm, "BepInExRuntime.zip", gPath);
+                    }
+                    progressBar.Value = 55;
+
                     string target = Path.Combine(gPath, "BepInEx", "plugins");
                     Directory.CreateDirectory(target);
 
@@ -483,6 +536,14 @@ namespace IronXNestCommand.Installer
 
                 if (chkMelon.Checked)
                 {
+                    if (!IsMelonLoaderInstalled(gPath))
+                    {
+                        lblLog.Text = "Installiere MelonLoader Runtime...";
+                        Application.DoEvents();
+                        ExtractEmbeddedZip(asm, "MelonLoaderRuntime.zip", gPath);
+                    }
+                    progressBar.Value = 85;
+
                     string target = Path.Combine(gPath, "Mods");
                     Directory.CreateDirectory(target);
 
@@ -494,7 +555,7 @@ namespace IronXNestCommand.Installer
                 lblLog.Text = "✔ Installation erfolgreich! Starte das Spiel über Steam und drücke [F8].";
                 lblLog.ForeColor = MainForm.cEmerald;
 
-                MessageBox.Show("IronXNestCommand wurde erfolgreich installiert!\n\nStarte das Spiel und drücke [F8] für das Co-op Menü.", "Installation erfolgreich", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("IronXNestCommand wurde erfolgreich installiert — inklusive benötigter Modloader-Runtime(s)!\n\nStarte das Spiel und drücke [F8] für das Co-op Menü.\n\nHinweis: Beim allerersten Start nach der Installation kann MelonLoader etwas länger brauchen (einmalige Interop-Generierung).", "Installation erfolgreich", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -551,6 +612,41 @@ namespace IronXNestCommand.Installer
                 {
                     s.CopyTo(fs);
                 }
+            }
+        }
+
+        // Entpackt eine als Ressource eingebettete Runtime-ZIP (BepInEx/MelonLoader) direkt
+        // in den Spielordner. Wird nur aufgerufen, wenn der jeweilige Loader noch fehlt.
+        private void ExtractEmbeddedZip(Assembly assembly, string resourceName, string destDir)
+        {
+            string match = null;
+            foreach (var name in assembly.GetManifestResourceNames())
+            {
+                if (name.EndsWith(resourceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    match = name;
+                    break;
+                }
+            }
+
+            if (match == null) throw new FileNotFoundException("Eingebettete Runtime-Ressource nicht gefunden: " + resourceName);
+
+            string tempZip = Path.Combine(Path.GetTempPath(), "ixnc_" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                using (Stream s = assembly.GetManifestResourceStream(match))
+                {
+                    if (s == null) throw new Exception("Runtime-Ressource konnte nicht geöffnet werden.");
+                    using (FileStream fs = new FileStream(tempZip, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        s.CopyTo(fs);
+                    }
+                }
+                ZipFile.ExtractToDirectory(tempZip, destDir);
+            }
+            finally
+            {
+                try { File.Delete(tempZip); } catch { }
             }
         }
     }

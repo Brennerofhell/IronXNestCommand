@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "IronXNestCommand"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.1.3"
 #define MyAppPublisher "IronX Team"
 #define MyAppURL "https://github.com/Brennerofhell/IronXNestCommand"
 #define GameExe "Iron Nest Heavy Turret Simulator.exe"
@@ -43,12 +43,24 @@ Name: "bepinex"; Description: "IronXNestCommand BepInEx 6 Host (Standard / Empfo
 Name: "melon"; Description: "IronXNestCommand MelonLoader 0.7.3 Host (Optional)"; Types: custom
 
 [Files]
-; BepInEx Payload
+; BepInEx 6 IL2CPP Runtime (vendored, siehe tools/Fetch-Vendor-Runtimes.ps1 + THIRD-PARTY-LICENSES.md)
+; -- keine separate BepInEx-Installation durch den Nutzer noetig.
+Source: "..\tools\vendor\BepInEx-extracted\*"; DestDir: "{app}"; Components: bepinex; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; MelonLoader Runtime (vendored) -- keine separate MelonLoader-Installation durch den Nutzer noetig.
+Source: "..\tools\vendor\MelonLoader-extracted\*"; DestDir: "{app}"; Components: melon; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; BepInEx Payload (unsere Mod-DLLs)
 Source: "..\IronXNestCommand.Host.BepInEx\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
 Source: "..\IronXNestCommand.Core\bin\Release\IronXNestCommand.Core.dll"; DestDir: "{app}\BepInEx\plugins"; Components: bepinex; Flags: ignoreversion
 
-; MelonLoader Payload
+; MelonLoader Payload (unsere Mod-DLL)
 Source: "..\IronXNestCommand.MelonLoader\bin\Release\IronXNestCommand.dll"; DestDir: "{app}\Mods"; Components: melon; Flags: ignoreversion
+
+; Lizenzen der gebuendelten Modloader-Runtimes
+Source: "..\Licenses\LICENSE-BepInEx.txt"; DestDir: "{app}\Licenses"; Components: bepinex; Flags: ignoreversion
+Source: "..\Licenses\LICENSE-MelonLoader.txt"; DestDir: "{app}\Licenses"; Components: melon; Flags: ignoreversion
+Source: "..\THIRD-PARTY-LICENSES.md"; DestDir: "{app}\UserData\IronXNestCommand"; Flags: ignoreversion
 
 ; Mod Manager GUI & Batch Tools
 Source: "..\tools\ModManagerGUI.ps1"; DestDir: "{app}\UserData\IronXNestCommand\tools"; Flags: ignoreversion

@@ -24,12 +24,27 @@ $coreDll  = Join-Path $repoRoot "IronXNestCommand.Core\bin\$Configuration\IronXN
 $melonDll = Join-Path $repoRoot "IronXNestCommand.MelonLoader\bin\$Configuration\IronXNestCommand.dll"
 
 if (-not (Test-Path $bepDll) -or -not (Test-Path $coreDll)) {
-    Write-Host "[1/3] Baue Solution..." -ForegroundColor Yellow
+    Write-Host "[1/4] Baue Solution..." -ForegroundColor Yellow
     dotnet build (Join-Path $repoRoot "IronXNestCommand.sln") -c $Configuration
 }
 
+# 1b. Vendored Modloader-Runtimes sicherstellen und zu Einzel-ZIPs fuer /resource: buendeln
+Write-Host "[1b/4] Stelle vendored Modloader-Runtimes sicher..." -ForegroundColor Yellow
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "Fetch-Vendor-Runtimes.ps1")
+
+$vendorDir = Join-Path $repoRoot "tools\vendor"
+$bepExtractDir   = Join-Path $vendorDir "BepInEx-extracted"
+$melonExtractDir = Join-Path $vendorDir "MelonLoader-extracted"
+$bepRuntimeZip   = Join-Path $distDir "_bepinex_runtime.zip"
+$melonRuntimeZip = Join-Path $distDir "_melon_runtime.zip"
+
+if (Test-Path $bepRuntimeZip) { Remove-Item $bepRuntimeZip -Force }
+if (Test-Path $melonRuntimeZip) { Remove-Item $melonRuntimeZip -Force }
+Compress-Archive -Path "$bepExtractDir\*" -DestinationPath $bepRuntimeZip -CompressionLevel Optimal
+Compress-Archive -Path "$melonExtractDir\*" -DestinationPath $melonRuntimeZip -CompressionLevel Optimal
+
 # 2. csc.exe suchen
-Write-Host "[2/3] Suche C# Compiler (csc.exe)..." -ForegroundColor Yellow
+Write-Host "[2/4] Suche C# Compiler (csc.exe)..." -ForegroundColor Yellow
 $cscCandidates = @(
     "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
     "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
@@ -45,11 +60,11 @@ if (-not $csc) {
     exit 1
 }
 
-# 3. Exe kompilieren mit eingebetteten DLLs
+# 3. Exe kompilieren mit eingebetteten DLLs + Modloader-Runtimes
 $outputExe = Join-Path $distDir "IronXNestCommand-Installer.exe"
 $sourceFile = Join-Path $repoRoot "tools\StandaloneInstaller\Program.cs"
 
-Write-Host "[3/3] Kompiliere eigenständige Single-File Setup.exe..." -ForegroundColor Yellow
+Write-Host "[3/4] Kompiliere eigenständige Single-File Setup.exe..." -ForegroundColor Yellow
 
 $argsList = @(
     "/target:winexe",
@@ -59,8 +74,12 @@ $argsList = @(
     "/reference:System.dll",
     "/reference:System.Drawing.dll",
     "/reference:System.Windows.Forms.dll",
+    "/reference:System.IO.Compression.dll",
+    "/reference:System.IO.Compression.FileSystem.dll",
     "/resource:$bepDll,IronXNestCommand.dll",
-    "/resource:$coreDll,IronXNestCommand.Core.dll"
+    "/resource:$coreDll,IronXNestCommand.Core.dll",
+    "/resource:$bepRuntimeZip,BepInExRuntime.zip",
+    "/resource:$melonRuntimeZip,MelonLoaderRuntime.zip"
 )
 
 if (Test-Path $melonDll) {
@@ -69,15 +88,19 @@ if (Test-Path $melonDll) {
 
 $argsList += $sourceFile
 
+Write-Host "[4/4] Verlinke Ressourcen ($([Math]::Round((Get-Item $bepRuntimeZip).Length / 1MB, 1)) MB BepInEx + $([Math]::Round((Get-Item $melonRuntimeZip).Length / 1MB, 1)) MB MelonLoader)..." -ForegroundColor Yellow
+
 & $csc $argsList
 if ($LASTEXITCODE -eq 0) {
-    $size = (Get-Item $outputExe).Length / 1KB
+    $size = (Get-Item $outputExe).Length / 1MB
     Write-Host ""
     Write-Host "  -> ERFOLG! Single-File Installer erstellt:" -ForegroundColor Green
     Write-Host "     Pfad: $outputExe" -ForegroundColor Cyan
-    Write-Host "     Groesse: $([Math]::Round($size, 1)) KB" -ForegroundColor Green
+    Write-Host "     Groesse: $([Math]::Round($size, 1)) MB" -ForegroundColor Green
     Write-Host ""
     Write-Host "Diese einzelne .exe-Datei kann nun direkt an jeden weitergegeben werden!" -ForegroundColor Green
 } else {
     Write-Error "Kompilierung des Installers fehlgeschlagen."
 }
+
+Remove-Item -Force -ErrorAction SilentlyContinue $bepRuntimeZip, $melonRuntimeZip

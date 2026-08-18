@@ -323,6 +323,26 @@ Auf Nachfrage geprüft: Der veröffentlichte GitHub-Release `v0.1.0` (Tag zeigte
 
 ---
 
+### 3.24 📦 Kein Overlay bei Kollegen: Installer bündelt jetzt BepInEx/MelonLoader-Runtimes mit
+
+#### Problem-Analyse (Root Cause)
+Ein Nutzer installierte die Mod über den Standalone-Installer, sah aber nie das `[F8]`-Overlay. Ursache: **keiner** der drei Installer (Standalone-`.exe`, ZIP, `Setup.exe`) prüfte oder installierte BepInEx/MelonLoader selbst — sie kopierten nur `IronXNestCommand.dll`/`IronXNestCommand.Core.dll` nach `BepInEx/plugins/` bzw. `Mods/` und meldeten unconditional „Installation erfolgreich", auch wenn der eigentliche Modloader im Zielordner gar nicht existierte. Ohne Loader lädt nichts unsere DLL — das Overlay erscheint nie, ohne dass irgendwo ein Fehler sichtbar wird. Betraf alle drei Distributionsformen gleichermaßen.
+
+#### Die Lösung
+Statt nur zu warnen, wenn der Loader fehlt, bündelt die Distribution ab Version `0.1.3` die Modloader-Runtimes direkt mit — echtes „Standalone", keine separate BepInEx-/MelonLoader-Installation mehr nötig:
+- **`tools/Fetch-Vendor-Runtimes.ps1`** (neu): lädt gepinnte Builds von BepInEx 6 IL2CPP (Bleeding-Edge Build 785, `builds.bepinex.dev`) und MelonLoader (`v0.7.3`, `MelonLoader.x64.zip`) herunter und entpackt sie nach `tools/vendor/` (gitignored, ~50+ MB, nur auf der Build-Maschine benötigt). Lizenzen (LGPL-2.1 bzw. Apache-2.0) erlauben das Bundling kompilierter Binaries in einem Drittanbieter-Installer — siehe [`THIRD-PARTY-LICENSES.md`](../THIRD-PARTY-LICENSES.md).
+- **`tools/Package-Release.ps1`**: ruft den Fetch-Schritt auf und kopiert die entpackten Runtimes zusätzlich zu unseren eigenen DLLs in den ZIP-Payload.
+- **`tools/StandaloneInstaller/Program.cs`**: neue Heuristik-Checks `IsBepInExInstalled`/`IsMelonLoaderInstalled` (Root-Proxy-Datei bzw. `BepInEx/core/*.dll`/`MelonLoader/`-Ordner). `Build-Standalone-Exe.ps1` bettet die vendored Runtimes als je eine `/resource:`-ZIP ein (`BepInExRuntime.zip`, `MelonLoaderRuntime.zip`); `BtnInstall_Click` entpackt sie vor dem Kopieren der Plugin-DLLs, aber **nur wenn der jeweilige Loader noch nicht erkannt wird** — ein bereits vorhandener/neuerer Loader wird nicht überschrieben.
+- **`tools/Installer.iss`**: `[Files]`-Sektion bekommt neue Einträge für die vendored Runtimes unter den bestehenden Components `bepinex`/`melon` — Ankreuzen einer Komponente installiert jetzt den echten Loader mit, nicht nur unsere Plugin-DLL.
+- **Bewusst nicht automatisiert**: Der Uninstaller entfernt weiterhin nur unsere eigenen Plugin-DLLs, nicht die komplette BepInEx-/MelonLoader-Installation — andere Mods könnten denselben Loader im selben Spielordner mitbenutzen, ein automatisches Löschen wäre destruktiv.
+
+#### Bekannte Grenze
+MelonLoaders `Il2CppAssemblies` werden erst beim ersten echten Spielstart generiert (MelonLoader-interner Mechanismus). Bundling erspart nur den separaten Download-/Installationsschritt für MelonLoader selbst — der erste Spielstart nach der Installation dauert trotzdem spürbar länger, während MelonLoader die Interop-Assemblies generiert. Das ist erwartetes Verhalten, kein Bug.
+
+**Wartungshinweis**: BepInEx 6 IL2CPP hat keinen stabilen Release-Kanal (nur Bleeding-Edge-Builds mit wechselnder Build-Nummer). Der gepinnte Build liegt in `tools/Fetch-Vendor-Runtimes.ps1` (`$BepInExUrl`) und muss gelegentlich manuell aktualisiert werden.
+
+---
+
 ## 4. Offizielle GUI-Vorlage: 1:1 Unity IMGUI-Implementierung
 
 Das Interface wurde pixelgenau nach der modernen Anthropic / Dieselpunk Design-Vorlage umgesetzt:
