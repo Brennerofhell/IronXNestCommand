@@ -528,7 +528,36 @@ Der Quellcode (github.com/1499501762/OPEN_NEST_CO-OP) wurde **nur lokal geklont,
 #### Doppeltes GUI vermieden (Nachtrag, statt Panel-Unterdrückung)
 Keine Panel-Unterdrückung für `OpenNestCoop.UI.CoopUIManager` versucht — dessen UGUI-Panel wird einmalig in `BuildCanvas()`/`Start()` gebaut und hat kein einfaches, robust auffindbares Sichtbarkeits-Flag wie die alte IMGUI-`CoopRunner.DrawCoopPanel`-Methode aus §3.20. Stattdessen wie oben empfohlen umgesetzt: `CommandOverlay.DrawLobbyCrewContent` (beide Hosts) zeigt bei erkanntem Open Nest Co-op (`SteamworksDetector.IsOpenNestCoopDetected`) statt der eigenen "+ Lobby erstellen"/"> Lobby Beitreten"-Buttons nur einen Hinweistext, das Open-Nest-Co-op-eigene Menü (oben links) zu benutzen. Erstellen/Beitreten läuft dann ausschließlich dort; sobald eine Lobby aktiv ist, übernimmt unser eigener Besatzungs-/Re-Sync-Bereich wie gewohnt (der Zustand kommt über die §3.30-Bridge). Vermeidet die Panel-Kollision vollständig, ohne in fremden UI-Code einzugreifen.
 
-**Status**: Implementiert, baut fehlerfrei in beiden Hosts (0 Fehler). **Nicht live getestet** in dieser Session (auf Nutzerwunsch nicht deployed) — vor dem nächsten Release gegen eine echte Open-Nest-Co-op-Installation verifizieren.
+**Status (aktualisiert nach Live-Test, siehe §3.31)**: Bridge-Erkennung live bestätigt.
+
+---
+
+### 3.31 🧪 Live-Test der Open-Nest-Co-op-Bridge (§3.30) — Log bestätigt, Screenshot-Verifikation gescheitert
+
+#### Testaufbau
+BepInEx-Build (inkl. §3.29-Callback-Fix und §3.30-Bridge/GUI-Fix) frisch auf die reale Spielinstallation deployed, Spiel gestartet, Log ausgewertet, danach per automatisiertem Screenshot die Overlay-Darstellung geprüft.
+
+#### Ergebnis: Bridge funktioniert, Log fehlerfrei
+`BepInEx/LogOutput.log` zeigt:
+```
+[SteamworksDetector] Initialisiere Steamworks & IronNestCoop Erkennung...
+[SteamworksDetector] Steamworks.NET erkannt — Autonomer Lobby-Modus bereit.   ← 1. Poll: Open Nest Co-op noch nicht geladen
+...
+[SteamworksDetector] ★ Open Nest Co-op Bridge aktiv (CoopRuntime.Net).        ← späterer Poll: erkannt
+```
+Der erste `Initialize()`-Durchlauf griff auf den generischen Steamworks.NET-Fallback zurück, weil `OpenNestCoop.Core.CoopRuntime` zu dem Zeitpunkt im BepInEx-Ladeprozess noch nicht verfügbar war (Plugin-Ladereihenfolge). Der bestehende 2-Sekunden-Poll in `CheckSteamState()` (Guard `!IsIronNestCoopDetected && !IsOpenNestCoopDetected` löst erneutes `ResolveTypes()` aus) hat sich **selbst korrigiert**, sobald Open Nest Co-op fertig geladen war — funktioniert also robust auch bei Lade-Race-Conditions zwischen den beiden Plugins. **0 Treffer** für „error"/„exception" über den gesamten Log.
+
+#### Screenshot-Verifikation des GUI-Fixes: technisch gescheitert
+Der automatisierte Test (Fenster fokussieren → `F8` senden → Screenshot) hat **nicht das Spielfenster erwischt**, sondern den realen Desktop des Nutzers — `[Win32]::SetForegroundWindow($proc.MainWindowHandle)` traf offenbar das falsche/kein Fenster (vermutlich zeigt `MainWindowHandle` bei diesem BepInEx-Konsolen+Unity-Fenster-Setup nicht zuverlässig auf das tatsächliche Render-Fenster). Der resultierende Screenshot enthielt persönliche Inhalte des Nutzers (Browserverlauf, Antivirus-Dateiliste) — **wurde ungeprüft/unkommentiert sofort gelöscht**, ohne den Inhalt weiter auszuwerten oder wiederzugeben.
+
+Kurz danach war der Spielprozess ohne jeden Fehlerlog-Eintrag beendet (kein Crash-Trace, log endet mitten im normalen `[Net] stats 10s`-Rhythmus) — Ursache nicht abschließend geklärt (denkbar: externe Beendigung durch das im selben Moment sichtbare Antivirus-Programm, das frisch kompilierte, unsignierte BepInEx-Injektion oder die `SendKeys`-Tastatursimulation als verdächtig einstufen könnte; siehe auch die SmartScreen-Reputationsproblematik aus §3.22). Ein erneuter Testlauf wurde in dieser Session nicht mehr gestartet.
+
+#### Bewertung
+Die **funktionale Kernaussage ist durch das Log ausreichend belegt** (Bridge aktiv, keine Fehler). Die **visuelle Bestätigung des "kein doppeltes GUI mehr"-Fixes aus §3.30 steht noch aus** — sollte beim nächsten manuellen Spieltest (durch einen Menschen, nicht automatisiert) mitgeprüft werden: Panel sollte im "Keine Lobby"-Zustand nur noch den Hinweistext zeigen, keine "+ Lobby erstellen"/"> Lobby Beitreten"-Buttons mehr.
+
+**Lehre für künftige automatisierte Screenshot-Tests**: `Process.MainWindowHandle` ist bei Spielen mit zusätzlichem Konsolenfenster (BepInEx-Log-Konsole + eigentliches Unity-Fenster) nicht verlässlich das Zielfenster — vor dem nächsten Versuch per `EnumWindows`+`GetWindowThreadProcessId` gezielt nach dem Fenster mit dem Spieltitel suchen statt `MainWindowHandle` blind zu vertrauen, und das Zielfenster anhand seines Titels verifizieren, bevor Tastatureingaben/Screenshots ausgelöst werden.
+
+Test-Deployment nach diesem Durchlauf wieder vollständig rückgängig gemacht (`IronXNestCommand.dll`/`.Core.dll` aus `BepInEx/plugins/`, `UserData/IronXNestCommand/` entfernt).
 
 ---
 
