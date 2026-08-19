@@ -509,6 +509,30 @@ Es wird **kein eigener `SteamAPI.RunCallbacks()`-Pump** ergänzt. Der Fix verlä
 
 ---
 
+### 3.30 🌉 Open Nest Co-op als zweiter Soft-Dependency-Pfad (`CoopRuntime.Net`)
+
+#### Ausgangslage
+§3.28 stellte live fest: Auf realen Installationen läuft meist **Open Nest Co-op**, nicht `IronNestCoop.Core.dll`. Erste Idee war, dessen Quellcode zu forken/vendoren — dagegen spricht dessen eigene Lizenz: Open Nest Co-op steht unter **AGPL-3.0**, Kopieren/Modifizieren seines Codes und Weitervertrieb würde das gesamte IronXNestCommand-Paket AGPL-3.0-pflichtig machen (Konflikt mit der aktuellen MIT-Lizenz).
+
+Der Quellcode (github.com/1499501762/OPEN_NEST_CO-OP) wurde **nur lokal geklont, um ihn zu lesen — nicht vendort, nicht committet, nach der Analyse wieder gelöscht.** Aus dessen eigener `docs/API.md`-FAQ (im Original zitiert): *„仅调用注册 API（不复制本代码）不构成派生作品，你的扩展可用任意协议"* — sinngemäß: reines **Aufrufen** der öffentlichen API (ohne Code zu kopieren) begründet keine Ableitung und unterliegt keiner AGPL-Pflicht; nur Kopieren/Modifizieren des Codes selbst tut das. Genau das ist die bereits etablierte Architektur dieses Projekts für `IronNestCoop.Core.dll` (siehe `CLAUDE.md`: *"reflection was chosen specifically to avoid hard version coupling"*).
+
+#### Die Lösung
+`SteamworksDetector.cs` (beide Hosts) bekommt `OpenNestCoop.Core.CoopRuntime` als **zweiten Soft-Dependency-Pfad**, mit derselben Priorität wie IronNestCoop (Reihenfolge: IronNestCoop → Open Nest Co-op → generischer Steamworks.NET-Fallback aus §3.29):
+
+- **Erkennung**: `OpenNestCoop.Core.CoopRuntime.Net` (statisches Feld, Typ `NetManager`) über alle geladenen Assemblies gesucht — analog zu `IronNestCoop.Core.Net.SteamNet`.
+- **`TryCreateLobby`**: setzt `NetManager.PendingLobbyName`/`.PendingMaxPlayers` reflektiv, ruft dann `NetManager.CreateLobby()` (parameterlos) auf. Ergebnis kommt asynchron über deren eigene interne Steam-Callback-Behandlung — unser bestehendes 2-Sekunden-Poll in `CheckSteamState()` liest `NetManager.State` (`SessionState.Idle/Hosting/Joined`) und übernimmt automatisch.
+- **`TryJoinLobby`**: parst die eingegebene ID (dezimal oder Hex) und ruft `NetManager.Lobby.JoinLobby(ulong)` auf (öffentliche Methode auf `SteamLobby`).
+- **`TryLeaveLobby`**: ruft `NetManager.LeaveSession()`.
+- **`CheckSteamState`**: liest `NetManager.State`/`.Roster` (Liste von `PlayerSession` mit `.Name`) und `SteamLobby.LobbyID` (per Reflection das `m_SteamID`-Feld des `CSteamID`-Structs), um `IsInLobby`/`CurrentLobbyId`/`ConnectedPlayers` zu befüllen.
+
+#### Bewusst nicht in dieser Session umgesetzt
+- **Keine Panel-Unterdrückung für `OpenNestCoop.UI.CoopUIManager`** (das doppelte GUI aus §3.28 bleibt bestehen). Der Quellcode zeigt: die Haupt-Lobby-Ansicht wird einmalig in `CoopUIManager.BuildCanvas()`/`Start()` als UGUI-Canvas gebaut und ist nicht über ein einfaches, robust auffindbares Sichtbarkeits-Flag steuerbar (anders als die alte IMGUI-`CoopRunner.DrawCoopPanel`-Methode aus §3.20, auf die ein einfacher Harmony-Prefix passte) — eine belastbare Unterdrückung hätte deutlich mehr Quellcode-Studium und ein fragileres, versionsabhängiges Patch-Ziel erfordert, als im Rahmen dieser Session vertretbar war.
+- **Stattdessen empfohlen für später**: `CommandOverlay` so anpassen, dass es bei erkanntem Open Nest Co-op (`SteamworksDetector.IsOpenNestCoopDetected`) die eigenen "Lobby erstellen"/"Lobby beitreten"-Buttons durch einen Hinweis ersetzt, das Open-Nest-Co-op-eigene Menü zu benutzen (das ohnehin einen volleren Lobby-Browser mit Raumliste bietet) — vermeidet die Panel-Kollision komplett, ohne in fremden UI-Code eingreifen zu müssen.
+
+**Status**: Implementiert, baut fehlerfrei in beiden Hosts (0 Fehler). **Nicht live getestet** in dieser Session (auf Nutzerwunsch nicht deployed) — vor dem nächsten Release gegen eine echte Open-Nest-Co-op-Installation verifizieren.
+
+---
+
 ## 5. Build- & Deployment-Anleitung
 
 ### 5.1 Dual-Loader Deployment (1-Klick)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.RegularExpressions;
@@ -35,6 +36,27 @@ namespace IronXNestCommand.Host.BepInEx.Steam
         private static FieldInfo _coopPipeField;
         private static MethodInfo _coopActivateInviteDialog;
 
+        public static bool IsOpenNestCoopDetected { get; private set; } = false;
+
+        // Open Nest Co-op Reflection Cache (github.com/1499501762/OPEN_NEST_CO-OP, AGPL-3.0).
+        // Reine Reflection-Bruecke ueber dessen oeffentliche API (OpenNestCoop.Core.CoopRuntime.Net,
+        // NetManager, SteamLobby) -- kein Code aus diesem Projekt wird kopiert/vendored. Laut dessen
+        // eigener docs/API.md-FAQ begruendet reines Aufrufen der oeffentlichen API keine Ableitung und
+        // unterliegt keiner AGPL-Pflicht ("仅调用注册 API ... 不构成派生作品").
+        private static Type _openNestRuntimeType;
+        private static FieldInfo _openNestNetField;
+        private static MethodInfo _openNestCreateLobby;
+        private static MethodInfo _openNestLeaveSession;
+        private static PropertyInfo _openNestLobbyProp;
+        private static FieldInfo _openNestPendingNameField;
+        private static FieldInfo _openNestPendingMaxField;
+        private static PropertyInfo _openNestStateProp;
+        private static PropertyInfo _openNestIsHostProp;
+        private static PropertyInfo _openNestHostSteamIdProp;
+        private static PropertyInfo _openNestRosterProp;
+        private static MethodInfo _openNestLobbyJoinByUlong;
+        private static PropertyInfo _openNestLobbyIdProp;
+
         // Generic Steamworks Reflection Cache
         private static Type _steamMatchmakingType;
         private static Type _steamFriendsType;
@@ -66,10 +88,12 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
             if (IsIronNestCoopDetected)
                 ModLogger.Info("[SteamworksDetector] ★ IronNestCoop Bridge aktiv! Direkte Synchronisation mit Co-op Modus.");
+            else if (IsOpenNestCoopDetected)
+                ModLogger.Info("[SteamworksDetector] ★ Open Nest Co-op Bridge aktiv! Direkte Synchronisation mit Co-op Modus.");
             else if (IsSteamAvailable)
                 ModLogger.Info("[SteamworksDetector] Steamworks.NET erkannt — Autonomer Lobby-Modus bereit.");
             else
-                ModLogger.Warn("[SteamworksDetector] Weder IronNestCoop noch Steamworks.NET gefunden — Stub-Modus aktiv.");
+                ModLogger.Warn("[SteamworksDetector] Weder IronNestCoop/Open Nest Co-op noch Steamworks.NET gefunden — Stub-Modus aktiv.");
 
             CheckSteamState();
         }
@@ -184,7 +208,59 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 return;
             }
 
-            // 2. Fallback: Generic Steamworks
+            // 2. Fallback: Open Nest Co-op (das tatsaechlich aktiv genutzte Community-Plugin,
+            // siehe DOCUMENTATION.md §3.28) -- Soft-Dependency genau wie IronNestCoop oben, nur
+            // ueber CoopRuntime.Net (NetManager) statt einer eigenen SteamNet-Bruecke.
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                try { _openNestRuntimeType ??= asm.GetType("OpenNestCoop.Core.CoopRuntime"); }
+                catch { }
+            }
+
+            if (_openNestRuntimeType != null)
+            {
+                try
+                {
+                    _openNestNetField = _openNestRuntimeType.GetField("Net", BindingFlags.Public | BindingFlags.Static);
+                    object netInstance = _openNestNetField?.GetValue(null);
+                    if (netInstance != null)
+                    {
+                        Type netManagerType = netInstance.GetType();
+                        _openNestCreateLobby = netManagerType.GetMethod("CreateLobby", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+                        _openNestLeaveSession = netManagerType.GetMethod("LeaveSession", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestLobbyProp = netManagerType.GetProperty("Lobby", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestPendingNameField = netManagerType.GetField("PendingLobbyName", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestPendingMaxField = netManagerType.GetField("PendingMaxPlayers", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestStateProp = netManagerType.GetProperty("State", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestIsHostProp = netManagerType.GetProperty("IsHost", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestHostSteamIdProp = netManagerType.GetProperty("HostSteamId", BindingFlags.Public | BindingFlags.Instance);
+                        _openNestRosterProp = netManagerType.GetProperty("Roster", BindingFlags.Public | BindingFlags.Instance);
+
+                        object lobbyInstance = _openNestLobbyProp?.GetValue(netInstance);
+                        if (lobbyInstance != null)
+                        {
+                            Type lobbyType = lobbyInstance.GetType();
+                            _openNestLobbyJoinByUlong = lobbyType.GetMethod("JoinLobby", BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(ulong) }, null);
+                            _openNestLobbyIdProp = lobbyType.GetProperty("LobbyID", BindingFlags.Public | BindingFlags.Instance);
+                        }
+
+                        if (_openNestCreateLobby != null)
+                        {
+                            IsOpenNestCoopDetected = true;
+                            IsSteamAvailable = true;
+                            LastStatusMessage = "Open Nest Co-op erkannt (Bereit)";
+                            ModLogger.Info("[SteamworksDetector] ★ Open Nest Co-op Bridge aktiv (CoopRuntime.Net).");
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ModLogger.Warn($"[SteamworksDetector] Open Nest Co-op Anbindung fehlgeschlagen: {ex.Message}");
+                }
+            }
+
+            // 3. Fallback: Generic Steamworks
             string[] steamAssemblies = {
                 "Il2Cppcom.rlabrecque.steamworks.net",
                 "Il2CppHeathen.Steamworks",
@@ -416,7 +492,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
         public static void CheckSteamState()
         {
-            if (!IsIronNestCoopDetected)
+            if (!IsIronNestCoopDetected && !IsOpenNestCoopDetected)
             {
                 ResolveTypes();
             }
@@ -482,6 +558,65 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 }
             }
 
+            if (IsOpenNestCoopDetected && _openNestNetField != null && _openNestStateProp != null)
+            {
+                try
+                {
+                    object netInstance = _openNestNetField.GetValue(null);
+                    if (netInstance == null) return;
+
+                    int state = Convert.ToInt32(_openNestStateProp.GetValue(netInstance));
+                    // OpenNestCoop.Net.SessionState: Idle=0, Hosting=1, Joined=2
+                    bool inLobby = state != 0;
+                    IsInLobby = inLobby;
+
+                    if (inLobby)
+                    {
+                        ulong lobbyId = 0;
+                        object lobbyInstance = _openNestLobbyProp?.GetValue(netInstance);
+                        if (lobbyInstance != null && _openNestLobbyIdProp != null)
+                        {
+                            object cSteamId = _openNestLobbyIdProp.GetValue(lobbyInstance);
+                            FieldInfo mSteamIdField = cSteamId?.GetType().GetField("m_SteamID");
+                            if (mSteamIdField != null) lobbyId = Convert.ToUInt64(mSteamIdField.GetValue(cSteamId));
+                        }
+                        CurrentLobbyId = lobbyId;
+                        CurrentLobbyShort = "";
+
+                        ConnectedPlayers.Clear();
+                        var roster = _openNestRosterProp?.GetValue(netInstance) as System.Collections.IEnumerable;
+                        if (roster != null)
+                        {
+                            foreach (var session in roster)
+                            {
+                                string name = (string)session.GetType().GetField("Name")?.GetValue(session);
+                                if (!string.IsNullOrEmpty(name) && !ConnectedPlayers.Contains(name))
+                                {
+                                    ConnectedPlayers.Add(name);
+                                }
+                            }
+                        }
+                        if (ConnectedPlayers.Count == 0) ConnectedPlayers.Add("Du");
+
+                        LastStatusMessage = $"✔ Co-op Aktiv (Open Nest Co-op) · {ConnectedPlayers.Count} Spieler";
+                        FairnessGuard.SetMultiplayerState(ConnectedPlayers.Count > 1);
+                    }
+                    else
+                    {
+                        CurrentLobbyId = 0;
+                        CurrentLobbyShort = "";
+                        ConnectedPlayers.Clear();
+                        LastStatusMessage = "Open Nest Co-op bereit (Keine Lobby)";
+                        FairnessGuard.SetMultiplayerState(false);
+                    }
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ModLogger.Warn($"[SteamworksDetector] Open Nest Co-op Status-Fehler: {ex.Message}");
+                }
+            }
+
             if (!IsSteamAvailable)
             {
                 LastStatusMessage = "IronNestCoop-Mod nicht gefunden — für Lobby-Funktionen benötigt";
@@ -491,7 +626,7 @@ namespace IronXNestCommand.Host.BepInEx.Steam
 
         public static void TryCreateLobby(int maxMembers = 4)
         {
-            if (!IsIronNestCoopDetected)
+            if (!IsIronNestCoopDetected && !IsOpenNestCoopDetected)
             {
                 ResolveTypes();
             }
@@ -511,6 +646,30 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                     var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
                     LastStatusMessage = $"Fehler: {inner.Message}";
                     ModLogger.Warn($"[SteamworksDetector] CreateLobby Fehler: {inner}");
+                    return;
+                }
+            }
+
+            if (IsOpenNestCoopDetected && _openNestCreateLobby != null)
+            {
+                try
+                {
+                    object netInstance = _openNestNetField?.GetValue(null);
+                    if (netInstance != null)
+                    {
+                        _openNestPendingNameField?.SetValue(netInstance, "IronXNestCommand Lobby");
+                        _openNestPendingMaxField?.SetValue(netInstance, maxMembers);
+                        _openNestCreateLobby.Invoke(netInstance, null);
+                        LastStatusMessage = "⏳ Erstelle Lobby (Open Nest Co-op)...";
+                        ModLogger.Info("[SteamworksDetector] OpenNestCoop NetManager.CreateLobby() aufgerufen.");
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
+                    LastStatusMessage = $"❌ Fehler: {inner.Message}";
+                    ModLogger.Warn($"[SteamworksDetector] OpenNestCoop CreateLobby Fehler: {inner}");
                     return;
                 }
             }
@@ -604,6 +763,41 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 }
             }
 
+            if (IsOpenNestCoopDetected && _openNestLobbyJoinByUlong != null)
+            {
+                try
+                {
+                    ulong lobbyId = 0;
+                    if (!ulong.TryParse(cleanCode, out lobbyId))
+                    {
+                        ulong.TryParse(sanitizedHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out lobbyId);
+                    }
+
+                    if (lobbyId == 0)
+                    {
+                        LastStatusMessage = $"❌ Ungültiger Lobby-Code '{cleanCode}'.";
+                        return;
+                    }
+
+                    object netInstance = _openNestNetField?.GetValue(null);
+                    object lobbyInstance = netInstance != null ? _openNestLobbyProp?.GetValue(netInstance) : null;
+                    if (lobbyInstance != null)
+                    {
+                        _openNestLobbyJoinByUlong.Invoke(lobbyInstance, new object[] { lobbyId });
+                        LastStatusMessage = $"⏳ Trete Lobby {lobbyId} bei (Open Nest Co-op)...";
+                        ModLogger.Info($"[SteamworksDetector] OpenNestCoop Lobby.JoinLobby aufgerufen (ID: {lobbyId}).");
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
+                    LastStatusMessage = $"❌ Fehler: {inner.Message}";
+                    ModLogger.Warn($"[SteamworksDetector] OpenNestCoop JoinLobby Fehler: {inner}");
+                    return;
+                }
+            }
+
             if (ulong.TryParse(cleanCode, out ulong id))
             {
                 TryJoinLobbyUlong(id);
@@ -648,6 +842,25 @@ namespace IronXNestCommand.Host.BepInEx.Steam
                 catch (Exception ex)
                 {
                     ModLogger.Warn($"[SteamworksDetector] Coop-LeaveLobby Fehler: {ex.Message}");
+                }
+            }
+
+            if (IsOpenNestCoopDetected && _openNestLeaveSession != null)
+            {
+                try
+                {
+                    object netInstance = _openNestNetField?.GetValue(null);
+                    if (netInstance != null)
+                    {
+                        _openNestLeaveSession.Invoke(netInstance, null);
+                        LastStatusMessage = "Lobby verlassen.";
+                        OnLobbyLeft();
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ModLogger.Warn($"[SteamworksDetector] OpenNestCoop LeaveSession Fehler: {ex.Message}");
                 }
             }
 
