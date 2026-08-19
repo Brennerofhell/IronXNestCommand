@@ -313,7 +313,21 @@ namespace IronXNestCommand.Host.BepInEx.Overlay
             GUI.Label(new Rect(x, y, w, 14), "STEAM-LOBBY", _sectionHeaderStyle);
             y += 18;
 
-            if (!inLobby && !_joinInputMode)
+            if (!inLobby && !_joinInputMode && SteamworksDetector.IsOpenNestCoopDetected)
+            {
+                // Open Nest Co-op hat ein eigenes, volleres Lobby-Menü (Raumliste, Refresh,
+                // Freunde-Einladen) mit eigenem UGUI-Panel, das sich nicht robust unterdrücken
+                // lässt (siehe DOCUMENTATION.md §3.28/§3.30). Statt konkurrierender Buttons hier
+                // nur ein Verweis darauf — verhindert das doppelte GUI, ohne in fremden UI-Code
+                // einzugreifen. Erstellen/Beitreten läuft dort; sobald eine Lobby aktiv ist,
+                // übernimmt unser eigener Besatzungs-/Re-Sync-Bereich unten wie gewohnt.
+                DrawBox(new Rect(x, y, w, 82), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
+                GUI.Label(new Rect(x + 14, y + 8, w - 28, 60),
+                    "Open Nest Co-op erkannt. Lobby über dessen eigenes Menü (oben links) erstellen oder beitreten — erscheint hier automatisch.",
+                    _lobbySubtextStyle);
+                y += 92;
+            }
+            else if (!inLobby && !_joinInputMode)
             {
                 // Unconnected State (Dashed Container)
                 DrawBox(new Rect(x, y, w, 82), _texCardDashed, new Color(0.820f, 0.800f, 0.765f, 0.8f));
