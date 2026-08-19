@@ -486,8 +486,26 @@ Auf dieser (und vermutlich vielen anderen) Installationen läuft **`OpenNestCoop
 
 #### Für später (nicht in dieser Session umgesetzt)
 - Reflection-Ziele in `SteamworksDetector.cs`/der Panel-Suppression um `OpenNestCoop.*`-Typnamen erweitern (analog zum bestehenden `IronNestCoop.Core.*`-Pfad) — oder direkt auf einen sauber lizenzierten Fork von [`OPEN_NEST_CO-OP`](https://github.com/1499501762/OPEN_NEST_CO-OP) (AGPL-3.0) umstellen, siehe die Lizenz-Abwägung in `THIRD-PARTY-LICENSES.md`.
-- Prüfen, ob ein eigener `SteamAPI.RunCallbacks()`-Pump (z. B. in `MultiplayerPatches`/einem `Update`-Hook) nötig ist, damit unsere eigene `CreateLobby`-Anfrage tatsächlich eine Antwort bekommt, statt auf einen fremden Callback-Kontext zu hoffen.
 - Test-Deployment nach diesem Durchlauf wieder rückgängig gemacht: `IronXNestCommand.dll`/`IronXNestCommand.Core.dll` aus `BepInEx/plugins/` sowie `UserData/IronXNestCommand/` auf der Testinstallation entfernt.
+
+---
+
+### 3.29 🔌 Fehlender `LobbyCreated_t`/`LobbyEnter_t`-Callback nachgerüstet (Ursache für hängendes „Lobby erstellen")
+
+#### Problem-Analyse (Root Cause, direkte Fortsetzung von §3.28)
+`SteamworksDetector.TryCreateLobby()`/`TryJoinLobbyUlong()` riefen im generischen Steamworks.NET-Fallback (kein `IronNestCoop`-Backend erkannt) `SteamMatchmaking.CreateLobby`/`JoinLobby` per Reflection auf — beide sind in Steamworks.NET **asynchrone** Aufrufe, deren Ergebnis erst über einen separat registrierten `Callback<LobbyCreated_t>` bzw. `Callback<LobbyEnter_t>` ankommt, sobald irgendwo im Prozess `SteamAPI.RunCallbacks()` läuft. Der Code registrierte nie einen solchen Callback — der native Aufruf feuerte folgenlos ins Leere, `CurrentLobbyId`/`IsInLobby` wurden nie gesetzt, die UI blieb für immer auf „Erstelle..."/„Trete bei..." stehen.
+
+#### Die Lösung
+Da `Steamworks.NET` in diesem Projekt bewusst nie als Compile-Zeit-Referenz eingebunden wird (Reflection-only-Policy, siehe `CLAUDE.md`), lässt sich `Callback<T>.Create(DispatchDelegate)` nicht direkt aufrufen — `T` ist ein zur Compile-Zeit unbekannter Werttyp (Struct), und `Delegate.CreateDelegate` kann eine `object`-Parameter-Methode nicht an einen wertttyp-parametrisierten Delegaten binden.
+
+- **`RegisterSteamCallback(structTypeName, handlerMethodName)`** (neu, beide Hosts): baut per `System.Reflection.Emit.DynamicMethod` einen minimalen IL-Trampolin, der das per Reflection übergebene Callback-Struct boxt und an einen eigenen `object`-Handler weiterreicht, und ruft darüber `Steamworks.Callback<T>.Create(...)` generisch auf. Die zurückgegebene `Callback<T>`-Instanz wird in einem statischen Feld (`_lobbyCreatedCallback`/`_lobbyEnteredCallback`) gehalten — sonst sammelt sie der GC ein und der Callback feuert nie mehr.
+- Wird direkt nach erfolgreicher generischer Steamworks-Erkennung in `ResolveTypes()` einmalig für `LobbyCreated_t` und `LobbyEnter_t` registriert.
+- **`OnLobbyCreatedBoxed`/`OnLobbyEnteredBoxed`**: lesen `m_eResult`/`m_EChatRoomEnterResponse` und `m_ulSteamIDLobby` aus dem geboxten Struct via Reflection, setzen bei Erfolg (`EResult.k_EResultOK == 1` bzw. `EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess == 1`) `CurrentLobbyId`/`IsInLobby` und eine positive `LastStatusMessage`; sonst eine konkrete Fehlermeldung mit Result-/Response-Code statt des vorherigen endlosen Wartens.
+
+#### Bekannte Grenze — bewusst nicht gelöst
+Es wird **kein eigener `SteamAPI.RunCallbacks()`-Pump** ergänzt. Der Fix verlässt sich darauf, dass irgendein anderer Steamworks.NET-Konsument im selben Prozess (z. B. Open Nest Co-op, das seinen eigenen Kontext bereits jeden Frame pumpt) diese Aufgabe übernimmt — Steamworks.NET dispatcht `RunCallbacks()`-Ergebnisse an **alle** im Prozess registrierten `Callback<T>`-Instanzen für diese Callback-ID, unabhängig davon, wer sie registriert hat, daher reicht das Mitschwimmen aus. Ein eigener Pump wurde bewusst nicht ergänzt, da ein zweiter `RunCallbacks()`-Aufruf pro Frame mit einem bereits vorhandenen Pumper (z. B. Open Nest Co-op) kollidieren und dessen Timing stören könnte. **Konsequenz**: Ist BepInEx + IronXNestCommand ganz ohne weitere Steamworks.NET-nutzende Mod installiert, pumpt niemand `RunCallbacks()` — der Callback bleibt dann weiterhin stumm, auch mit diesem Fix. In der Praxis ist das selten, da eine Co-op-Basis-Mod (IronNestCoop, Open Nest Co-op, o. ä.) ohnehin Voraussetzung für sinnvolle Mehrspieler-Nutzung ist.
+
+**Status**: Implementiert und baut fehlerfrei in beiden Hosts (`dotnet build` → 0 Fehler), **aber nicht live im Spiel getestet** in dieser Session (auf Nutzerwunsch nicht deployed). Vor dem nächsten Release gegen eine echte Installation mit Open Nest Co-op oder IronNestCoop verifizieren.
 
 ---
 

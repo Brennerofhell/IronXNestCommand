@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Reflection.Emit;
 using MelonLoader;
 using IronXNestCommand.Core;
 
@@ -48,6 +49,15 @@ namespace IronXNestCommand.Steam
         private static MethodInfo _mGetLobbyMemberByIndex;
         private static MethodInfo _mGetFriendPersonaName;
         private static MethodInfo _mActivateGameOverlayInviteDialog;
+
+        // Steamworks.NET LobbyCreated_t/LobbyEnter_t Callback-Instanzen (autonomer Modus).
+        // Muessen als Feld gehalten werden, sonst sammelt der GC sie ein und der Callback feuert nie.
+        // Setzen KEINEN eigenen SteamAPI.RunCallbacks()-Pump auf -- verlaesst sich darauf, dass ein
+        // anderer Steamworks.NET-Konsument im Prozess (z.B. Open Nest Co-op) das bereits jeden Frame
+        // tut. Ohne einen solchen Pumper (BepInEx + IronXNestCommand ganz ohne weitere Coop-Mod)
+        // feuert der Callback nie -- siehe DOCUMENTATION.md.
+        private static object _lobbyCreatedCallback;
+        private static object _lobbyEnteredCallback;
 
         private static float _pollTimer = 0f;
         private const float PollInterval = 2.0f;
@@ -234,6 +244,115 @@ namespace IronXNestCommand.Steam
                 }
 
                 LastStatusMessage = "Steamworks bereit";
+
+                _lobbyCreatedCallback ??= RegisterSteamCallback("LobbyCreated_t", nameof(OnLobbyCreatedBoxed));
+                _lobbyEnteredCallback ??= RegisterSteamCallback("LobbyEnter_t", nameof(OnLobbyEnteredBoxed));
+            }
+        }
+
+        // Registriert per Reflection einen Steamworks.NET Callback<T> fuer einen Callback-Struct-Typ,
+        // dessen Name wir nur als String kennen (kein Compile-Zeit-Reference auf Steamworks.NET).
+        // Callback<T>.Create() erwartet ein DispatchDelegate(T param) -- T ist ein Value-Type-Struct,
+        // dessen genauer Typ erst zur Laufzeit bekannt ist. Delegate.CreateDelegate kann eine Methode
+        // mit Parametertyp "object" nicht direkt an einen Delegattyp mit Werttyp-Parameter binden, also
+        // bauen wir per DynamicMethod einen minimalen IL-Trampolin, der das Struct boxt und an unseren
+        // Handler (Parametertyp object) weiterreicht.
+        private static object RegisterSteamCallback(string structTypeName, string handlerMethodName)
+        {
+            try
+            {
+                Assembly steamAsm = _steamMatchmakingType.Assembly;
+                Type structType = steamAsm.GetType("Steamworks." + structTypeName) ?? steamAsm.GetType("Il2CppSteamworks." + structTypeName);
+                Type callbackOpenType = steamAsm.GetType("Steamworks.Callback`1") ?? steamAsm.GetType("Il2CppSteamworks.Callback`1");
+                if (structType == null || callbackOpenType == null) return null;
+
+                Type callbackClosedType = callbackOpenType.MakeGenericType(structType);
+                Type dispatchDelegateType = callbackClosedType.GetNestedType("DispatchDelegate");
+                if (dispatchDelegateType == null) return null;
+
+                MethodInfo createMethod = callbackClosedType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static, null, new[] { dispatchDelegateType }, null);
+                MethodInfo handlerMethod = typeof(SteamworksDetector).GetMethod(handlerMethodName, BindingFlags.NonPublic | BindingFlags.Static);
+                if (createMethod == null || handlerMethod == null) return null;
+
+                var dm = new DynamicMethod(
+                    "IronXNestCommand_" + structTypeName + "_Thunk",
+                    typeof(void),
+                    new[] { structType },
+                    typeof(SteamworksDetector).Module,
+                    true);
+                ILGenerator il = dm.GetILGenerator();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Box, structType);
+                il.EmitCall(OpCodes.Call, handlerMethod, null);
+                il.Emit(OpCodes.Ret);
+
+                Delegate thunk = dm.CreateDelegate(dispatchDelegateType);
+                object callbackInstance = createMethod.Invoke(null, new object[] { thunk });
+                MelonLogger.Msg($"[SteamworksDetector] {structTypeName} Callback registriert (Autonomer Modus).");
+                return callbackInstance;
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SteamworksDetector] Konnte {structTypeName} Callback nicht registrieren: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static void OnLobbyCreatedBoxed(object lobbyCreatedResult)
+        {
+            try
+            {
+                Type t = lobbyCreatedResult.GetType();
+                object resultField = t.GetField("m_eResult")?.GetValue(lobbyCreatedResult);
+                object lobbyIdField = t.GetField("m_ulSteamIDLobby")?.GetValue(lobbyCreatedResult);
+                int resultValue = resultField != null ? Convert.ToInt32(resultField) : -1;
+
+                // Steamworks EResult.k_EResultOK == 1
+                if (resultValue == 1 && lobbyIdField != null)
+                {
+                    CurrentLobbyId = Convert.ToUInt64(lobbyIdField);
+                    IsInLobby = true;
+                    LastStatusMessage = "✔ Lobby erstellt!";
+                    MelonLogger.Msg($"[SteamworksDetector] Lobby erstellt: {CurrentLobbyId}");
+                }
+                else
+                {
+                    LastStatusMessage = $"❌ Lobby-Erstellung fehlgeschlagen (Result {resultValue}).";
+                    MelonLogger.Warning($"[SteamworksDetector] LobbyCreated_t Fehler-Result: {resultValue}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SteamworksDetector] Fehler beim Verarbeiten von LobbyCreated_t: {ex.Message}");
+            }
+        }
+
+        private static void OnLobbyEnteredBoxed(object lobbyEnterResult)
+        {
+            try
+            {
+                Type t = lobbyEnterResult.GetType();
+                object responseField = t.GetField("m_EChatRoomEnterResponse")?.GetValue(lobbyEnterResult);
+                object lobbyIdField = t.GetField("m_ulSteamIDLobby")?.GetValue(lobbyEnterResult);
+                int responseValue = responseField != null ? Convert.ToInt32(responseField) : -1;
+
+                // Steamworks EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess == 1
+                if (responseValue == 1 && lobbyIdField != null)
+                {
+                    CurrentLobbyId = Convert.ToUInt64(lobbyIdField);
+                    IsInLobby = true;
+                    LastStatusMessage = "✔ Lobby beigetreten!";
+                    MelonLogger.Msg($"[SteamworksDetector] Lobby beigetreten: {CurrentLobbyId}");
+                }
+                else
+                {
+                    LastStatusMessage = $"❌ Lobby-Beitritt fehlgeschlagen (Response {responseValue}).";
+                    MelonLogger.Warning($"[SteamworksDetector] LobbyEnter_t Fehler-Response: {responseValue}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning($"[SteamworksDetector] Fehler beim Verarbeiten von LobbyEnter_t: {ex.Message}");
             }
         }
 
